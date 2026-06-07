@@ -1,0 +1,103 @@
+# file must be linux format, which uses \n only ,not \r\n
+# Oracle automated installation configuration file
+# After copying, edit: cp config/oracle.conf.example config/oracle.conf
+
+# ==================== Required: deployment type and versions ====================
+# ora_type: oracle=standalone | asm=ASM standalone | rac=RAC
+ora_type="oracle"
+
+# DB software version: 11gR1 | 11gR2 | 12cR1 | 12cR2 | 18c | 19c
+db_version="11gR2"
+
+# GI software version (required for asm/rac): 11gR2 | 12cR1 | 12cR2 | 18c | 19c
+gi_version="11gR2"
+
+# run_mode: env=configure environment only | software=install software only | full=install software and create database
+run_mode="software"
+
+# ==================== Users and passwords ====================
+gi_user="grid"
+# gi_pwd=""                 # Leave empty to auto-generate a strong password and write to log
+db_user="oracle"
+# db_pwd=""                 # Leave empty to auto-generate a strong password and write to log
+
+# group_mode: simple=simple mode (OSDBA only) | detail=detail mode (multiple group privileges)
+group_mode="simple"
+oinstall_group="oinstall"
+
+# ==================== Install media (comma-separated zip paths) ====================
+# db_install_file="/opt/software/19c_db1.zip,/opt/software/19c_db2.zip"
+db_install_file="p13390677_112040_Linux-x86-64_1of7.zip,p13390677_112040_Linux-x86-64_2of7.zip"
+
+# Required for asm/rac
+# gi_install_file="/opt/software/19c_grid1.zip,/opt/software/19c_grid2.zip"
+gi_install_file=""
+
+# Patches (optional): file:target  target=gi|db|gidb
+# gi/db: iterate extracted subdirs, run as db/gi user: opatch apply <subdir> -oh <home>
+# gidb: root runs opatch auto <extract_path> -oh <home> on gi_home and db_home
+# patch_files="/opt/patch/12345678.zip:db,/opt/patch/23456789.zip:gi"
+patch_files="p31718723_112040_Linux-x86-64_gi_201020.zip:gidb,p31668908_112040_Linux-x86-64_ojvm_201020.zip:db"
+
+# OPatch upgrade (optional): file:target  target=gi|db|gidb
+# opatch_db.zip:db       - backup OPatch, unzip to db_home as db_user, verify
+# opatch_gi.zip:gi       - root backup, gi_user unzip to temp, root move to gi_home (skipped if no GI)
+# opatch_dbgi.zip:gidb   - upgrade both GI and DB (GI skipped if not installed)
+# opatch_files="opatch_db.zip:db,opatch_gi.zip:gi,opatch_dbgi.zip:gidb"
+opatch_files="p6880880_112000_Linux-x86-64_31.zip:db"
+
+# ==================== Directories ====================
+db_base="/u01/app/oracle"
+# db_home default: ${db_base}/product/<version>/dbhome_1
+db_home=""
+gi_base="/u01/app/grid"
+# gi_home default: /u01/app/<gi_version>/grid
+gi_home=""
+
+# ==================== Network ====================
+# Standalone/asm: hostname:ip  (ip optional, auto-detected)
+# rac: hostname:public_ip:vip:priv_ip1+priv_ip2,...
+# ora_net="oradb1:192.168.1.101"
+ora_net="oratest"
+
+# Required for rac
+cluster_name=""
+# cluser_name=""            # Alias for cluster_name
+root_pwd=""
+
+# ==================== ASM disk groups ====================
+# Format: diskgroup:disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2
+# Multiple disk groups separated by #
+# At least one of disk_name/WWID required; asm_disk_name defaults to disk_name
+use_multipathd="0"
+
+# Required for rac (OCR/Voting)
+# asm_ocr_dg="OCR:sdb,scsi-36000...,asm_ocr1+sdc,scsi-36000...,asm_ocr2"
+asm_ocr_dg=""
+
+# Required for asm standalone / optional for rac (data disk groups)
+# asm_dat_dg="DATA:sdd,scsi-36000...,asm_data1+sde,scsi-36000...,asm_data2"
+asm_dat_dg=""
+
+# ==================== System configuration ====================
+# Oracle available memory (MiB/GiB); leave empty for auto-calculation
+memory_for_oracle=""
+
+# NTP servers (comma-separated); configures slew-mode time synchronization
+ntp_servers=""
+
+# OS install ISO, mounted as yum/dnf source
+os_iso_file=""
+
+# ==================== Database parameters (run_mode=full) ====================
+ORACLE_SID="orcl"
+ORACLE_DATA_DIR="/u01/oradata"
+ORACLE_FRA_DIR="/u01/fast_recovery_area"
+DB_CHARACTERSET="AL32UTF8"
+DB_NATIONAL_CHARACTERSET="AL16UTF16"
+DB_CREATE_AS_CDB="1"
+DB_PDB_NAME="orclpdb"
+LISTENER_PORT="1521"
+ENABLE_AUTOSTART="1"
+USE_ORACLE_PREINSTALL_RPM="1"
+LOG_DIR="/var/log/orainstall"
