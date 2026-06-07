@@ -237,7 +237,7 @@ apply_patch_auto_subdirs_to_home() {
         log_info "Applying patch (opatch auto) to $oracle_home (root, dir=$subdir)"
 
         ORACLE_HOME="$oracle_home" \
-            "${oracle_home}/OPatch/opatch" auto "$subdir" -oh "$oracle_home" \
+            "${oracle_home}/OPatch/opatch" auto -silent "$subdir" -oh "$oracle_home" \
             2>&1 | tee -a "$LOG_FILE" || log_warn "opatch auto may have failed: $subdir -> $oracle_home"
     done
 
@@ -269,7 +269,7 @@ apply_patch_subdirs_to_home() {
 
         run_as_user "$run_user" "
             export ORACLE_HOME=${oracle_home}
-            \$ORACLE_HOME/OPatch/opatch apply '${subdir}' -oh ${oracle_home}
+            \$ORACLE_HOME/OPatch/opatch apply -silent '${subdir}' -oh ${oracle_home}
         " 2>&1 | tee -a "$LOG_FILE" || log_warn "opatch apply may have failed: $subdir -> $oracle_home"
     done
 
@@ -305,7 +305,7 @@ apply_patch_level2_subdirs_to_home() {
 
             run_as_user "$run_user" "
                 export ORACLE_HOME=${oracle_home}
-                \$ORACLE_HOME/OPatch/opatch apply '${subdir}' -oh ${oracle_home}
+                \$ORACLE_HOME/OPatch/opatch apply -silent '${subdir}' -oh ${oracle_home}
             " 2>&1 | tee -a "$LOG_FILE" || log_warn "opatch apply may have failed: $subdir -> $oracle_home"
         done
     done
