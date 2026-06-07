@@ -12,8 +12,8 @@ configure_asm_udev() {
     log_info "Configuring ASM udev rules..."
 
     local all_dgs=()
-    all_dgs+=("${ASM_OCR_DGS[@]}")
-    all_dgs+=("${ASM_DAT_DGS[@]}")
+    [[ -v ASM_OCR_DGS && ${#ASM_OCR_DGS[@]} -gt 0 ]] && all_dgs+=("${ASM_OCR_DGS[@]}")
+    [[ -v ASM_DAT_DGS && ${#ASM_DAT_DGS[@]} -gt 0 ]] && all_dgs+=("${ASM_DAT_DGS[@]}")
 
     local udev_file="/etc/udev/rules.d/99-oracle-asm.rules"
     backup_file "$udev_file"
@@ -69,8 +69,12 @@ prepare_asm_disks_for_installer() {
     ASM_DISKS_FOR_OCR=()
     ASM_DISKS_FOR_DATA=()
 
-    collect_dg_disks ASM_OCR_DGS ASM_DISKS_FOR_OCR
-    collect_dg_disks ASM_DAT_DGS ASM_DISKS_FOR_DATA
+    if [[ -v ASM_OCR_DGS && ${#ASM_OCR_DGS[@]} -gt 0 ]]; then
+        collect_dg_disks ASM_OCR_DGS ASM_DISKS_FOR_OCR
+    fi
+    if [[ -v ASM_DAT_DGS && ${#ASM_DAT_DGS[@]} -gt 0 ]]; then
+        collect_dg_disks ASM_DAT_DGS ASM_DISKS_FOR_DATA
+    fi
 }
 
 collect_dg_disks() {

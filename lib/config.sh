@@ -238,6 +238,8 @@ parse_asm_diskgroups() {
         local IFS='#'
         read -ra ASM_DAT_DGS <<< "$asm_dat_dg"
     fi
+
+    export ASM_OCR_DGS ASM_DAT_DGS
 }
 
 need_gi() {

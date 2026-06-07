@@ -94,20 +94,24 @@ create_asm_diskgroups() {
     local all_dgs=()
 
     # OCR disk group may already be created during installation
-    for dg_spec in "${ASM_DAT_DGS[@]}"; do
-        [[ -z "$dg_spec" ]] && continue
-        all_dgs+=("$dg_spec")
-    done
+    if [[ -v ASM_DAT_DGS && ${#ASM_DAT_DGS[@]} -gt 0 ]]; then
+        for dg_spec in "${ASM_DAT_DGS[@]}"; do
+            [[ -z "$dg_spec" ]] && continue
+            all_dgs+=("$dg_spec")
+        done
+    fi
 
-    for dg_spec in "${ASM_OCR_DGS[@]}"; do
-        [[ -z "$dg_spec" ]] && continue
-        dg_name=$(parse_diskgroup_for_asmca "$dg_spec")
-        if run_as_grid "${gi_home}/bin/asmcmd lsdg 2>/dev/null | grep -qw ${dg_name}"; then
-            log_info "ASM disk group $dg_name already exists"
-            continue
-        fi
-        all_dgs+=("$dg_spec")
-    done
+    if [[ -v ASM_OCR_DGS && ${#ASM_OCR_DGS[@]} -gt 0 ]]; then
+        for dg_spec in "${ASM_OCR_DGS[@]}"; do
+            [[ -z "$dg_spec" ]] && continue
+            dg_name=$(parse_diskgroup_for_asmca "$dg_spec")
+            if run_as_grid "${gi_home}/bin/asmcmd lsdg 2>/dev/null | grep -qw ${dg_name}"; then
+                log_info "ASM disk group $dg_name already exists"
+                continue
+            fi
+            all_dgs+=("$dg_spec")
+        done
+    fi
 
     for dg_spec in "${all_dgs[@]}"; do
         [[ -z "$dg_spec" ]] && continue
