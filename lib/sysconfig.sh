@@ -136,6 +136,25 @@ EOF
     done
 }
 
+configure_directories() {
+    log_info "Creating directories and setting permissions..."
+
+    local dirs=("$db_base" "$db_home" "$ORACLE_DATA_DIR" "$ORACLE_FRA_DIR" "/u01/app/oraInventory")
+    if need_gi; then
+        dirs+=("$gi_base" "$gi_home")
+    fi
+
+    for d in "${dirs[@]}"; do
+        mkdir -p "$d"
+        chown "${db_user}:${oinstall_group}" "$d" 2>/dev/null || true
+        chmod 775 "$d"
+    done
+
+    if need_gi; then
+        chown -R "${gi_user}:${oinstall_group}" "$gi_base" "$gi_home" 2>/dev/null || true
+    fi
+}
+
 # Append or replace a marked block at the end of .bash_profile (preserve existing content)
 write_profile_block() {
     local profile_file="$1"
@@ -290,25 +309,6 @@ disable_zeroconf() {
 
     # Remove existing zeroconf route
     ip route del 169.254.0.0/16 dev lo 2>/dev/null || true
-}
-
-configure_directories() {
-    log_info "Creating directories and setting permissions..."
-
-    local dirs=("$db_base" "$db_home" "$ORACLE_DATA_DIR" "$ORACLE_FRA_DIR" "/u01/app/oraInventory")
-    if need_gi; then
-        dirs+=("$gi_base" "$gi_home")
-    fi
-
-    for d in "${dirs[@]}"; do
-        mkdir -p "$d"
-        chown "${db_user}:${oinstall_group}" "$d" 2>/dev/null || true
-        chmod 775 "$d"
-    done
-
-    if need_gi; then
-        chown -R "${gi_user}:${oinstall_group}" "$gi_base" "$gi_home" 2>/dev/null || true
-    fi
 }
 
 setup_autostart() {

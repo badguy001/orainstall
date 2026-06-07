@@ -35,7 +35,7 @@ create_oracle_users() {
         local gi_groups="$oinstall_group"
         read -r _gi_osdba _gi_osoper _gi_osasm <<< "$(get_gi_asm_group_names)"
         gi_groups="$oinstall_group,${_gi_osdba},${_gi_osoper},${_gi_osasm}"
-        create_user "$gi_user" "$next_uid" "$oinstall_group" "$gi_groups" "$gi_base"
+        create_user "$gi_user" "$next_uid" "$oinstall_group" "$gi_groups" "/home/$gi_user"
         next_uid=$(( next_uid + 1 ))
         echo "${gi_user}:${gi_pwd}" | chpasswd
     fi
@@ -53,7 +53,7 @@ create_oracle_users() {
         fi
     fi
 
-    create_user "$db_user" "$next_uid" "$oinstall_group" "$db_groups" "$db_base"
+    create_user "$db_user" "$next_uid" "$oinstall_group" "$db_groups" "/home/$db_user"
     echo "${db_user}:${db_pwd}" | chpasswd
 
     log_info "User creation complete: gi=$gi_user db=$db_user"

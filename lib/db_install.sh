@@ -5,6 +5,7 @@ prepare_db_media() {
     local staging
     staging=$(ensure_unzip_dir "/opt/oracle_staging/db")
     DB_INSTALL_DIR=$(unzip_media_files "$staging" "${DB_INSTALL_FILES[@]}")
+    chown -R "${db_user}:${oinstall_group}" "$staging"
     export DB_INSTALL_DIR
     log_info "DB install directory: $DB_INSTALL_DIR"
 }
@@ -133,14 +134,19 @@ install_db_software() {
 
     log_info "Starting silent Oracle Database software installation..."
 
-    local prereq_flags install_cmd
+    local prereq_flags install_cmd installer_tmp tmp_env tmp_flags
     prereq_flags=$(get_installer_prereq_flags "$db_version")
     log_info "Installer prereq ignore flags ($db_version): $prereq_flags"
 
+    installer_tmp="${db_base}/tmp"
+    ensure_installer_tmp_dir "$installer_tmp" "$db_user" "$oinstall_group"
+    tmp_env=$(installer_temp_env "$installer_tmp")
+    tmp_flags=$(runinstaller_tmp_flags "$installer_tmp")
+
     if [[ "$(basename "$installer")" == "setup.sh" ]]; then
-        install_cmd="cd ${installer_dir} && ./setup.sh -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}"
+        install_cmd="${tmp_env} && cd ${installer_dir} && ./setup.sh -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}"
     else
-        install_cmd="cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}"
+        install_cmd="${tmp_env} && cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} ${tmp_flags} -responseFile ${rsp_file}"
     fi
 
     local emagent_monitor=0

@@ -9,6 +9,7 @@ prepare_gi_media() {
     local staging
     staging=$(ensure_unzip_dir "/opt/oracle_staging/gi")
     GI_INSTALL_DIR=$(unzip_media_files "$staging" "${GI_INSTALL_FILES[@]}")
+    chown -R "${gi_user}:${oinstall_group}" "$staging"
     export GI_INSTALL_DIR
     log_info "GI install directory: $GI_INSTALL_DIR"
 }
@@ -44,11 +45,16 @@ install_gi_software() {
 
     log_info "Starting silent Grid Infrastructure installation..."
 
-    local prereq_flags
+    local prereq_flags installer_tmp tmp_env tmp_flags
     prereq_flags=$(get_installer_prereq_flags "$gi_version")
     log_info "Installer prereq ignore flags ($gi_version): $prereq_flags"
 
-    run_as_grid "cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}" \
+    installer_tmp="${gi_base}/tmp"
+    ensure_installer_tmp_dir "$installer_tmp" "$gi_user" "$oinstall_group"
+    tmp_env=$(installer_temp_env "$installer_tmp")
+    tmp_flags=$(runinstaller_tmp_flags "$installer_tmp")
+
+    run_as_grid "${tmp_env} && cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} ${tmp_flags} -responseFile ${rsp_file}" \
         2>&1 | tee -a "$LOG_FILE" || die "GI software installation failed"
 
     run_gi_root_scripts
