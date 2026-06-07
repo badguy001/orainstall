@@ -128,6 +128,23 @@ run_as_grid() {
     run_as_user "$GI_USER" "$1"
 }
 
+# Archive stale Oracle CVU temp dirs under /tmp before runInstaller (avoids INS-30131)
+archive_oracle_cvu_tmp_dirs() {
+    local ts dir base archived
+
+    ts=$(date '+%Y%m%d_%H%M%S')
+    for dir in /tmp/CVU_*; do
+        [[ -d "$dir" ]] || continue
+        base=$(basename "$dir")
+        archived="/tmp/${ts}_${base}"
+        if [[ -e "$archived" ]]; then
+            archived="/tmp/${ts}_$$_${base}"
+        fi
+        mv "$dir" "$archived"
+        log_info "Archived stale CVU temp directory: $dir -> $archived"
+    done
+}
+
 get_oracle_version_num() {
     version_to_num "$ORACLE_VERSION"
 }
@@ -344,38 +361,48 @@ is_private_ip() {
 
 ensure_unzip_dir() {
     local base="$1"
+    local owner="${2:-}"
+
     mkdir -p "$base"
-    echo "$base"
+    if [[ -n "$owner" ]]; then
+        chown "${owner}:${oinstall_group}" "$base"
+    fi
+    UNZIP_STAGING_DIR=$(abs_path "$base") || die "Invalid unzip directory: $base"
 }
 
 unzip_media_files() {
     local dest="$1"
-    shift
+    local run_user="$2"
+    shift 2
     local f zipdir
 
     [[ $# -gt 0 ]] || die "No install files specified"
+    [[ -n "$run_user" ]] || die "Install media must be extracted by install user"
 
-    mkdir -p "$dest"
+    dest=$(abs_path "$dest") || die "Invalid extract directory: $dest"
+
     for f in "$@"; do
         f=$(echo "$f" | xargs)
+        f=$(abs_path "$f") || die "Invalid install file path: $f"
         [[ -f "$f" ]] || die "Install file not found: $f"
-        log_info "Extracting: $f -> $dest"
-        unzip -qo "$f" -d "$dest"
+        log_info "Extracting: $f -> $dest (user=$run_user)"
+        run_as_user "$run_user" "unzip -qo '${f}' -d '${dest}'" \
+            2>&1 | tee -a "$LOG_FILE" || die "Failed to extract install file: $f"
     done
 
     # Find runInstaller root directory
     if [[ -x "${dest}/runInstaller" ]]; then
-        echo "$dest"
+        INSTALL_MEDIA_DIR="$dest"
     elif [[ -x "${dest}/grid/runInstaller" ]]; then
-        echo "${dest}/grid"
+        INSTALL_MEDIA_DIR="${dest}/grid"
     elif [[ -x "${dest}/database/runInstaller" ]]; then
-        echo "${dest}/database"
+        INSTALL_MEDIA_DIR="${dest}/database"
     else
         zipdir=$(find "$dest" -maxdepth 3 -name runInstaller -type f 2>/dev/null | head -1)
         if [[ -n "$zipdir" ]]; then
-            dirname "$zipdir"
-            return 0
+            INSTALL_MEDIA_DIR=$(dirname "$zipdir")
+        else
+            die "runInstaller not found after extraction: $dest"
         fi
-        die "runInstaller not found after extraction: $dest"
     fi
 }

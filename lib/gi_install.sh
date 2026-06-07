@@ -6,9 +6,9 @@ prepare_gi_media() {
         return 0
     fi
 
-    local staging
-    staging=$(ensure_unzip_dir "/opt/oracle_staging/gi")
-    GI_INSTALL_DIR=$(unzip_media_files "$staging" "${GI_INSTALL_FILES[@]}")
+    ensure_unzip_dir "/opt/oracle_staging/gi" "$gi_user"
+    unzip_media_files "$UNZIP_STAGING_DIR" "$gi_user" "${GI_INSTALL_FILES[@]}"
+    GI_INSTALL_DIR="$INSTALL_MEDIA_DIR"
     export GI_INSTALL_DIR
     log_info "GI install directory: $GI_INSTALL_DIR"
 }

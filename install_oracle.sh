@@ -99,6 +99,7 @@ configure_environment() {
 }
 
 install_software_stack() {
+    archive_oracle_cvu_tmp_dirs
     if need_gi; then
         install_gi_software
     fi

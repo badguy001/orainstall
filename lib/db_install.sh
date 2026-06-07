@@ -2,9 +2,9 @@
 # Oracle Database software installation and database creation
 
 prepare_db_media() {
-    local staging
-    staging=$(ensure_unzip_dir "/opt/oracle_staging/db")
-    DB_INSTALL_DIR=$(unzip_media_files "$staging" "${DB_INSTALL_FILES[@]}")
+    ensure_unzip_dir "/opt/oracle_staging/db" "$db_user"
+    unzip_media_files "$UNZIP_STAGING_DIR" "$db_user" "${DB_INSTALL_FILES[@]}"
+    DB_INSTALL_DIR="$INSTALL_MEDIA_DIR"
     export DB_INSTALL_DIR
     log_info "DB install directory: $DB_INSTALL_DIR"
 }

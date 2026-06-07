@@ -80,7 +80,8 @@ upgrade_opatch_gi() {
     [[ -d "$gi_home" ]] || { log_warn "GI ORACLE_HOME does not exist; skipping OPatch upgrade"; return 0; }
 
     local staging backup_name opatch_dir
-    staging=$(ensure_unzip_dir "/opt/oracle_staging/opatch_gi_$(basename "$opatch_zip" .zip)_$(opatch_backup_suffix)")
+    ensure_unzip_dir "/opt/oracle_staging/opatch_gi_$(basename "$opatch_zip" .zip)_$(opatch_backup_suffix)" "$gi_user"
+    staging="$UNZIP_STAGING_DIR"
     backup_name="OPatch_$(opatch_backup_suffix)"
 
     log_info "Upgrading GI OPatch: $opatch_zip -> $gi_home (root backup/move, user=$gi_user extract)"
@@ -92,7 +93,6 @@ upgrade_opatch_gi() {
         log_warn "No existing OPatch at ${gi_home}/OPatch; proceeding with fresh install"
     fi
 
-    chown "${gi_user}:${oinstall_group}" "$staging"
     run_as_user "$gi_user" "unzip -qo '${opatch_zip}' -d '${staging}'" 2>&1 | tee -a "$LOG_FILE" || \
         die "GI OPatch extraction failed: $opatch_zip"
 
@@ -176,7 +176,8 @@ apply_patches() {
         patch_file=$(abs_path "$patch_file") || die "Invalid patch file path: ${entry%%:*}"
         [[ -f "$patch_file" ]] || die "Patch file not found: $patch_file"
 
-        staging=$(ensure_unzip_dir "/opt/oracle_staging/patch_$(basename "$patch_file" .zip)")
+        ensure_unzip_dir "/opt/oracle_staging/patch_$(basename "$patch_file" .zip)"
+        staging="$UNZIP_STAGING_DIR"
         log_info "Extracting patch: $patch_file -> $staging"
         unzip -qo "$patch_file" -d "$staging"
 
