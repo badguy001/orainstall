@@ -114,26 +114,6 @@ abs_path() {
     fi
 }
 
-ensure_installer_tmp_dir() {
-    local dir="$1"
-    local owner="$2"
-    local group="${3:-${oinstall_group:-oinstall}}"
-
-    mkdir -p "$dir"
-    chown "${owner}:${group}" "$dir"
-    chmod 775 "$dir"
-}
-
-installer_temp_env() {
-    local tmp="$1"
-    printf "export TMPDIR='%s' TMP='%s' TEMP='%s'" "$tmp" "$tmp" "$tmp"
-}
-
-runinstaller_tmp_flags() {
-    local tmp="$1"
-    printf '%s' "-tmpdir ${tmp} -J-Djava.io.tmpdir=${tmp}"
-}
-
 run_as_user() {
     local user="$1"
     local cmd="$2"
