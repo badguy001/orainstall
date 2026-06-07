@@ -68,7 +68,7 @@ install_manual_packages() {
                     ksh libaio libaio.i686 libaio-devel libaio-devel.i686
                     libgcc libgcc.i686 libstdc++ libstdc++.i686 libstdc++-devel libstdc++-devel.i686
                     libXext libXtst libX11 libXau libXi libXrender libXrender-devel
-                    make sysstat unixODBC unixODBC-devel device-mapper-multipath
+                    make sysstat unixODBC unixODBC-devel device-mapper-multipath psmisc
                 )
                 ;;
             7)
@@ -78,7 +78,7 @@ install_manual_packages() {
                     libX11 libXau libXi libXtst libXrender libXrender-devel
                     libgcc libstdc++ libstdc++-devel libxcb libibverbs
                     make sysstat smartmontools net-tools nfs-utils unzip
-                    policycoreutils-python device-mapper-multipath
+                    policycoreutils-python device-mapper-multipath psmisc
                 )
                 ;;
             8|9)
@@ -87,7 +87,7 @@ install_manual_packages() {
                     libX11 libXau libXi libXtst libXrender libXrender-devel
                     libgcc libstdc++ libstdc++-devel libxcb libnsl
                     make sysstat smartmontools net-tools nfs-utils unzip
-                    policycoreutils-python-utils device-mapper-multipath
+                    policycoreutils-python-utils device-mapper-multipath psmisc
                 )
                 ;;
         esac
