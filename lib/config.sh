@@ -330,3 +330,7 @@ need_asm_storage() {
 is_rac() {
     [[ "$ora_type" == "rac" ]]
 }
+
+is_asm_standalone() {
+    [[ "$ora_type" == "asm" ]]
+}

@@ -35,6 +35,16 @@ create_oracle_users() {
         local gi_groups="$oinstall_group"
         read -r _gi_osdba _gi_osoper _gi_osasm <<< "$(get_gi_asm_group_names)"
         gi_groups="$oinstall_group,${_gi_osdba},${_gi_osoper},${_gi_osasm}"
+        if is_asm_standalone; then
+            case ",${gi_groups}," in
+                *,dba,*)
+                    ;;
+                *)
+                    gi_groups="${gi_groups},dba"
+                    log_info "ASM standalone: adding DB DBA group (dba) to ${gi_user}"
+                    ;;
+            esac
+        fi
         create_user "$gi_user" "$next_uid" "$oinstall_group" "$gi_groups" "/home/$gi_user"
         next_uid=$(( next_uid + 1 ))
         echo "${gi_user}:${gi_pwd}" | chpasswd
