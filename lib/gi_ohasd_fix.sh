@@ -74,4 +74,27 @@ stop_gi_ohasd_inittab_monitor() {
         wait "$GI_OHASD_MONITOR_PID" 2>/dev/null || true
     fi
     GI_OHASD_MONITOR_PID=""
+
+    kill_init_ohasd_processes
+}
+
+kill_init_ohasd_processes() {
+    local pids pid
+
+    if command -v pgrep &>/dev/null; then
+        pids=$(pgrep -f '/etc/init.d/init.ohasd' 2>/dev/null || true)
+    else
+        pids=$(ps -eo pid=,args= 2>/dev/null | grep '/etc/init.d/init.ohasd' | grep -v grep | awk '{print $1}' || true)
+    fi
+
+    [[ -n "$pids" ]] || return 0
+
+    for pid in $pids; do
+        case "$pid" in
+            ''|*[!0-9]*) continue ;;
+        esac
+        kill -0 "$pid" 2>/dev/null || continue
+        log_info "Stopping init.ohasd process (pid=$pid)"
+        kill "$pid" 2>/dev/null || true
+    done
 }
