@@ -35,7 +35,8 @@ gi_install_file=""
 
 # Patches (optional): file:target  target=gi|db|gidb
 # gi/db: iterate extracted subdirs, run as db/gi user: opatch apply <subdir> -oh <home>
-# gidb: root runs opatch auto <extract_path> -oh <home> on gi_home and db_home
+# gidb + GI installed: root iterates subdirs: opatch auto <subdir> -oh gi_home/db_home
+# gidb + no GI: iterate level-2 subdirs, db_user: opatch apply <subdir> -oh db_home
 # patch_files="/opt/patch/12345678.zip:db,/opt/patch/23456789.zip:gi"
 patch_files="p31718723_112040_Linux-x86-64_gi_201020.zip:gidb,p31668908_112040_Linux-x86-64_ojvm_201020.zip:db"
 

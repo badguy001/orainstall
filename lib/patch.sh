@@ -5,6 +5,10 @@ opatch_backup_suffix() {
     date '+%Y%m%d_%H%M%S'
 }
 
+gi_software_installed() {
+    need_gi && [[ -d "$gi_home" && -x "${gi_home}/OPatch/opatch" ]]
+}
+
 find_opatch_dir_in_staging() {
     local staging="$1"
 
@@ -183,16 +187,23 @@ apply_patches() {
 
         case "$target" in
             gi)
+                chown -R "$gi_user:$oinstall_group" "$staging"
                 apply_patch_subdirs_to_home "$staging" "$gi_home" "$gi_user"
                 ;;
             db)
+                chown -R "$db_user:$oinstall_group" "$staging"
                 apply_patch_subdirs_to_home "$staging" "$db_home" "$db_user"
                 ;;
             gidb)
-                if need_gi; then
-                    apply_patch_auto_to_home "$staging" "$gi_home"
+                if gi_software_installed; then
+                    chown -R "$gi_user:$oinstall_group" "$staging"
+                    apply_patch_auto_subdirs_to_home "$staging" "$gi_home"
+                    chown -R "$db_user:$oinstall_group" "$staging"
+                    apply_patch_auto_subdirs_to_home "$staging" "$db_home"
+                else
+                    chown -R "$db_user:$oinstall_group" "$staging"
+                    apply_patch_level2_subdirs_to_home "$staging" "$db_home" "$db_user"
                 fi
-                apply_patch_auto_to_home "$staging" "$db_home"
                 ;;
             *)
                 log_warn "Unknown patch target: $target (gi|db|gidb); skipping $patch_file"
@@ -203,7 +214,7 @@ apply_patches() {
     log_info "Patch application complete"
 }
 
-apply_patch_auto_to_home() {
+apply_patch_auto_subdirs_to_home() {
     local staging="$1"
     local oracle_home="$2"
 
@@ -216,11 +227,23 @@ apply_patch_auto_to_home() {
 
     staging=$(abs_path "$staging") || die "Invalid patch staging directory: $staging"
 
-    log_info "Applying patch (opatch auto) to $oracle_home (root, dir=$staging)"
+    local subdir found=0
+    for subdir in "$staging"/*/; do
+        [[ -d "$subdir" ]] || continue
+        subdir="${subdir%/}"
+        subdir=$(abs_path "$subdir") || continue
 
-    ORACLE_HOME="$oracle_home" \
-        "${oracle_home}/OPatch/opatch" auto "$staging" -oh "$oracle_home" \
-        2>&1 | tee -a "$LOG_FILE" || log_warn "opatch auto may have failed: $staging -> $oracle_home"
+        found=1
+        log_info "Applying patch (opatch auto) to $oracle_home (root, dir=$subdir)"
+
+        ORACLE_HOME="$oracle_home" \
+            "${oracle_home}/OPatch/opatch" auto "$subdir" -oh "$oracle_home" \
+            2>&1 | tee -a "$LOG_FILE" || log_warn "opatch auto may have failed: $subdir -> $oracle_home"
+    done
+
+    if [[ "$found" -eq 0 ]]; then
+        log_warn "No patch subdirectories found in: $staging"
+    fi
 }
 
 apply_patch_subdirs_to_home() {
@@ -252,5 +275,42 @@ apply_patch_subdirs_to_home() {
 
     if [[ "$found" -eq 0 ]]; then
         log_warn "No patch subdirectories found in: $staging"
+    fi
+}
+
+apply_patch_level2_subdirs_to_home() {
+    local staging="$1"
+    local oracle_home="$2"
+    local run_user="$3"
+
+    [[ -d "$oracle_home" ]] || { log_warn "ORACLE_HOME does not exist; skipping patch: $oracle_home"; return 0; }
+
+    if [[ ! -x "${oracle_home}/OPatch/opatch" ]]; then
+        log_warn "OPatch not found: ${oracle_home}/OPatch/opatch"
+        return 0
+    fi
+
+    staging=$(abs_path "$staging") || die "Invalid patch staging directory: $staging"
+
+    local level1 subdir found=0
+    for level1 in "$staging"/*/; do
+        [[ -d "$level1" ]] || continue
+        for subdir in "$level1"/*/; do
+            [[ -d "$subdir" ]] || continue
+            subdir="${subdir%/}"
+            subdir=$(abs_path "$subdir") || continue
+
+            found=1
+            log_info "Applying patch to $oracle_home (user=$run_user, dir=$subdir)"
+
+            run_as_user "$run_user" "
+                export ORACLE_HOME=${oracle_home}
+                \$ORACLE_HOME/OPatch/opatch apply '${subdir}' -oh ${oracle_home}
+            " 2>&1 | tee -a "$LOG_FILE" || log_warn "opatch apply may have failed: $subdir -> $oracle_home"
+        done
+    done
+
+    if [[ "$found" -eq 0 ]]; then
+        log_warn "No level-2 patch subdirectories found in: $staging"
     fi
 }

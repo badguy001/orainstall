@@ -87,7 +87,7 @@ vi config/oracle.conf
 | `gi_home` | `/u01/app/<version>/grid` | GI home directory |
 | `group_mode` | `simple` | `simple` / `detail` |
 | `memory_for_oracle` | auto-calculated | Oracle available memory |
-| `patch_files` | - | Patch list `file:gi\|db\|gidb` (`gidb` uses root `opatch auto`; `gi`/`db` use user `opatch apply` per subdir) |
+| `patch_files` | - | Patch list `file:gi\|db\|gidb` (`gidb` + GI: root `opatch auto` per level-1 subdir; `gidb` without GI: `opatch apply` per level-2 subdir on DB) |
 | `opatch_files` | - | OPatch upgrade list `file:gi\|db\|gidb` (GI entries skipped when GI is not installed) |
 | `use_multipathd` | `0` | Whether to use multipath |
 | `ntp_servers` | - | NTP servers |
