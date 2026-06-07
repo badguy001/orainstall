@@ -188,7 +188,12 @@ set_gi_rsp_params() {
     local asm_osdba="$6"
     local asm_osoper="$7"
     local asm_osasm="$8"
-    local asm_disk_string="$9"
+    local asm_dg_disks="$9"
+    local asm_disk_discovery="${10}"
+    local asm_sysasm_pwd="${11}"
+    local asm_dg_name="${12}"
+    local asm_dg_redundancy="${13}"
+    local asm_dg_ausize="${14}"
 
     rsp_set_param "$dest" "oracle.install.option" "$install_option"
     rsp_set_param "$dest" "ORACLE_HOSTNAME" "$(hostname -s)"
@@ -205,14 +210,15 @@ set_gi_rsp_params() {
     rsp_set_param "$dest" "oracle.install.crs.config.gpnp.configureGNS" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.autoConfigureClusterNodeVIP" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.clusterNodes" "$cluster_nodes"
-    rsp_set_param "$dest" "oracle.install.crs.config.storageOption" "ASM"
+    rsp_set_param "$dest" "oracle.install.crs.config.storageOption" "ASM_STORAGE"
     rsp_set_param "$dest" "oracle.install.asm.storageOption" "ASM"
-    rsp_set_param "$dest" "oracle.install.asm.SYSASMPassword" "$gi_pwd"
-    rsp_set_param "$dest" "oracle.install.asm.diskGroup.name" "OCR"
-    rsp_set_param "$dest" "oracle.install.asm.diskGroup.disks" "$asm_disk_string"
-    rsp_set_param "$dest" "oracle.install.asm.diskGroup.diskDiscoveryString" \
-        "/dev/oracleasm/*,/dev/asm*,/dev/*oracle*,/dev/*asm*,/dev/*OCR*,/dev/*DATA*"
-    rsp_set_param "$dest" "oracle.install.asm.monitorPassword" "$gi_pwd"
+    rsp_set_param "$dest" "oracle.install.asm.SYSASMPassword" "$asm_sysasm_pwd"
+    rsp_set_param "$dest" "oracle.install.asm.diskGroup.name" "$asm_dg_name"
+    rsp_set_param "$dest" "oracle.install.asm.diskGroup.redundancy" "$asm_dg_redundancy"
+    rsp_set_param "$dest" "oracle.install.asm.diskGroup.AUSize" "$asm_dg_ausize"
+    rsp_set_param "$dest" "oracle.install.asm.diskGroup.disks" "$asm_dg_disks"
+    rsp_set_param "$dest" "oracle.install.asm.diskGroup.diskDiscoveryString" "$asm_disk_discovery"
+    rsp_set_param "$dest" "oracle.install.asm.monitorPassword" "$asm_sysasm_pwd"
     rsp_set_param "$dest" "oracle.install.crs.configureRHPS" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.ignoreDownNodes" "false"
     rsp_set_param "$dest" "oracle.install.config.managementOption" "NONE"
@@ -230,7 +236,7 @@ set_gi_rsp_params() {
 render_gi_install_rsp() {
     local dest="$1"
     local template install_option cluster_nodes scan_name cluster_name_cfg
-    local asm_osdba asm_osoper asm_osasm asm_disk_string=""
+    local asm_osdba asm_osoper asm_osasm asm_dg_disks=""
 
     template=$(resolve_rsp_template \
         "$(get_gi_install_rsp_template)" \
@@ -240,10 +246,8 @@ render_gi_install_rsp() {
 
     read -r asm_osdba asm_osoper asm_osasm <<< "$(get_gi_asm_group_names)"
 
-    if [[ ${#ASM_DISKS_FOR_OCR[@]} -gt 0 ]]; then
-        asm_disk_string=$(IFS=','; echo "${ASM_DISKS_FOR_OCR[*]}")
-    elif [[ ${#ASM_DISKS_FOR_DATA[@]} -gt 0 ]]; then
-        asm_disk_string=$(IFS=','; echo "${ASM_DISKS_FOR_DATA[*]}")
+    if [[ ${#ASM_DISKGROUP_DISK_LIST[@]} -gt 0 ]]; then
+        asm_dg_disks=$(IFS=','; echo "${ASM_DISKGROUP_DISK_LIST[*]}")
     fi
 
     install_option="HA_CONFIG"
@@ -262,5 +266,6 @@ render_gi_install_rsp() {
     cp -a "$template" "$dest"
 
     set_gi_rsp_params "$dest" "$install_option" "$cluster_nodes" "$scan_name" \
-        "$cluster_name_cfg" "$asm_osdba" "$asm_osoper" "$asm_osasm" "$asm_disk_string"
+        "$cluster_name_cfg" "$asm_osdba" "$asm_osoper" "$asm_osasm" "$asm_dg_disks" "$asm_disk_string" \
+        "$asm_passwd" "$asm_diskgroup_name" "$asm_diskgroup_redundancy" "$ASM_DISKGROUP_AUSIZE_MB"
 }

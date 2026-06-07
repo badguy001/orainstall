@@ -69,8 +69,9 @@ vi config/oracle.conf
 | `db_install_file` | DB install zip list (comma-separated) |
 | `gi_version` | GI version (asm/rac) |
 | `gi_install_file` | GI install zip list (asm/rac) |
-| `asm_dat_dg` | ASM data disk group (asm standalone) |
-| `asm_ocr_dg` | OCR disk group (rac) |
+| `disks_use_by_asm` | ASM disks for udev rules (asm/rac) |
+| `asm_diskgroup_disks` | Disks for GI install disk group (asm/rac) |
+| `asm_disk_string` | ASM disk discovery string (asm/rac, GI `diskDiscoveryString`) |
 | `ora_net` | Network info (required for rac) |
 | `cluster_name` | Cluster name (rac) |
 | `root_pwd` | Root password on each node (rac) |
@@ -90,6 +91,11 @@ vi config/oracle.conf
 | `patch_files` | - | Patch list `file:gi\|db\|gidb` (`gidb` + GI: root `opatch auto` per level-1 subdir; `gidb` without GI: `opatch apply` per level-2 subdir on DB) |
 | `opatch_files` | - | OPatch upgrade list `file:gi\|db\|gidb` (GI entries skipped when GI is not installed) |
 | `use_multipathd` | `0` | Whether to use multipath |
+| `ignore_disk_wwid` | `0` | When disk WWID unavailable: `0`=fail, `1`=use `disk_name` in udev rule |
+| `asm_diskgroup_name` | `OCR` | Disk group name created during GI install |
+| `asm_diskgroup_redundancy` | `EXTERNAL` | `NORMAL` / `HIGH` / `EXTERNAL` |
+| `asm_diskgroup_ausize` | `4` | AU size in MB for GI install disk group |
+| `asm_passwd` | auto-generated | SYSASM password (letters and digits only) |
 | `ntp_servers` | - | NTP servers |
 | `os_iso_file` | - | OS ISO image |
 
@@ -107,21 +113,28 @@ node1:192.168.1.11:192.168.1.21:10.0.0.11+10.0.0.12,node2:192.168.1.12:192.168.1
 ```
 Format: `hostname:public_ip:vip:priv_ip1+priv_ip2`
 
-### ASM Disk Group Format
+### ASM Disk Configuration
+
+**disks_use_by_asm** — all ASM disks for udev rules (required for asm/rac):
 
 ```
-diskgroup_name:disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2
+disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2
 ```
 
 - Multiple disks joined with `+`
-- Multiple disk groups separated by `#`
 - At least one of `disk_name` or `WWID` is required
-- `asm_disk_name` defaults to `disk_name`
+- `asm_disk_name` defaults to `disk_name`; path is relative to `/dev` (udev `SYMLINK+=`), e.g. `asmdisk/ocr1` creates `/dev/asmdisk/ocr1`
+
+**asm_diskgroup_disks** — comma-separated disks for the single disk group created during GI install (asm/rac required). Use the same path as `asm_disk_name` (relative to `/dev`) or full `/dev/...` path.
 
 Example:
 ```
-asm_ocr_dg="OCR:sdb,3600c0ff0ee...,asm_ocr1+sdc,3600c0ff0ff...,asm_ocr2"
-asm_dat_dg="DATA:sdd,3600c0ff0aa...,asm_data1"
+disks_use_by_asm="sdb,3600c0ff0ee...,asmdisk/ocr1+sdc,3600c0ff0ff...,asmdisk/ocr2"
+asm_diskgroup_disks="asmdisk/ocr1,asmdisk/ocr2"
+asm_diskgroup_name="OCR"
+asm_diskgroup_redundancy="EXTERNAL"
+asm_diskgroup_ausize="4"
+asm_disk_string="/dev/oracleasm/*,/dev/asm*,/dev/asmdisk/*"
 ```
 
 ### memory_for_oracle Auto-Calculation Rules
@@ -188,7 +201,10 @@ gi_version="19c"
 run_mode="full"
 gi_install_file="/opt/soft/grid.zip"
 db_install_file="/opt/soft/db.zip"
-asm_dat_dg="DATA:sdc,3600c0ff0abc...,asm_data1+sdd,3600c0ff0def...,asm_data2"
+disks_use_by_asm="sdc,3600c0ff0abc...,asmdisk/ocr1+sdd,3600c0ff0def...,asmdisk/ocr2"
+asm_diskgroup_disks="asmdisk/ocr1,asmdisk/ocr2"
+asm_diskgroup_name="OCR"
+asm_disk_string="/dev/oracleasm/*,/dev/asm*,/dev/asmdisk/*"
 ora_net="oraasm1:192.168.1.101"
 ```
 
@@ -204,15 +220,17 @@ root_pwd="YourRootPassword"
 gi_install_file="/opt/soft/grid1.zip,/opt/soft/grid2.zip"
 db_install_file="/opt/soft/db1.zip,/opt/soft/db2.zip"
 ora_net="rac1:192.168.1.11:192.168.1.21:10.0.0.11+10.0.0.12,rac2:192.168.1.12:192.168.1.22:10.0.0.13+10.0.0.14"
-asm_ocr_dg="OCR:sdb,3600c0ff0...,asm_ocr1+sdc,3600c0ff1...,asm_ocr2"
-asm_dat_dg="DATA:sdd,3600c0ff2...,asm_data1+sde,3600c0ff3...,asm_data2"
+disks_use_by_asm="sdb,3600c0ff0...,asmdisk/ocr1+sdc,3600c0ff1...,asmdisk/ocr2"
+asm_diskgroup_disks="asmdisk/ocr1,asmdisk/ocr2"
+asm_diskgroup_name="OCR"
+asm_disk_string="/dev/oracleasm/*,/dev/asm*,/dev/asmdisk/*"
 group_mode="detail"
 ```
 
 ## Logs
 
 - Install log: `/var/log/orainstall/install_YYYYMMDD_HHMMSS.log`
-- Auto-generated passwords are recorded in the log (`gi_pwd=` / `db_pwd=`)
+- Auto-generated passwords are recorded in the log (`gi_pwd=` / `db_pwd=` / `asm_passwd=`)
 
 ## Notes
 

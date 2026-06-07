@@ -59,6 +59,34 @@ generate_strong_password() {
     printf '%s' "$password"
 }
 
+generate_alphanumeric_password() {
+    local len="${1:-16}"
+    local password=""
+
+    password=$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c "$len" || true)
+
+    if [[ ${#password} -lt "$len" ]] && command -v openssl &>/dev/null; then
+        password=$(openssl rand -base64 32 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c "$len" || true)
+    fi
+
+    if [[ ${#password} -lt 8 ]]; then
+        password=$(date +%s%N | sha256sum 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c "$len" || true)
+    fi
+
+    [[ -n "$password" ]] || die "Failed to generate random password"
+    printf '%s' "$password"
+}
+
+# asm_disk_name is path relative to /dev (udev SYMLINK+=); returns /dev/<path>
+normalize_asm_disk_dev_path() {
+    local spec="${1// /}"
+    [[ -n "$spec" ]] || return 1
+    case "$spec" in
+        /dev/*) printf '%s' "$spec" ;;
+        *) printf '/dev/%s' "$spec" ;;
+    esac
+}
+
 die() {
     log_error "$@"
     exit 1

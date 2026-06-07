@@ -31,7 +31,7 @@ db_install_file="p13390677_112040_Linux-x86-64_1of7.zip,p13390677_112040_Linux-x
 
 # Required for asm/rac
 # gi_install_file="/opt/software/19c_grid1.zip,/opt/software/19c_grid2.zip"
-gi_install_file=""
+gi_install_file="p13390677_112040_Linux-x86-64_3of7.zip"
 
 # Patches (optional): file:target  target=gi|db|gidb
 # gi/db: iterate extracted subdirs, run as db/gi user: opatch apply <subdir> -oh <home>
@@ -43,9 +43,9 @@ patch_files="p31718723_112040_Linux-x86-64_gi_201020.zip:gidb,p31668908_112040_L
 # OPatch upgrade (optional): file:target  target=gi|db|gidb
 # opatch_db.zip:db       - backup OPatch, unzip to db_home as db_user, verify
 # opatch_gi.zip:gi       - root backup, gi_user unzip to temp, root move to gi_home (skipped if no GI)
-# opatch_dbgi.zip:gidb   - upgrade both GI and DB (GI skipped if not installed)
+# opatch_gidb.zip:gidb   - upgrade both GI and DB (GI skipped if not installed)
 # opatch_files="opatch_db.zip:db,opatch_gi.zip:gi,opatch_dbgi.zip:gidb"
-opatch_files="p6880880_112000_Linux-x86-64_31.zip:db"
+opatch_files="p6880880_112000_Linux-x86-64_31.zip:gidb"
 
 # ==================== Directories ====================
 db_base="/u01/app/oracle"
@@ -66,19 +66,37 @@ cluster_name=""
 # cluser_name=""            # Alias for cluster_name
 root_pwd=""
 
-# ==================== ASM disk groups ====================
-# Format: diskgroup:disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2
-# Multiple disk groups separated by #
+# ==================== ASM storage ====================
+# disks_use_by_asm: all ASM disks for udev rules (required for asm/rac)
+# Format: disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2
+# asm_disk_name is path relative to /dev (udev SYMLINK+=), e.g. asmdisk/ocr1 -> /dev/asmdisk/ocr1
 # At least one of disk_name/WWID required; asm_disk_name defaults to disk_name
+# disks_use_by_asm="sdb,scsi-36000...,asmdisk/ocr1+sdc,scsi-36000...,asmdisk/ocr2"
+disks_use_by_asm=""
+
+# ASM disk discovery string (required for asm/rac): GI rsp diskDiscoveryString
+# asm_disk_string="/dev/oracleasm/*,/dev/asm*,/dev/asmdisk/*"
+
+# When WWID cannot be obtained: 0=fail (default), 1=use disk_name in udev rule
+ignore_disk_wwid="0"
+
+# GI install disk group disks: comma-separated paths relative to /dev or /dev/... form
+# asm_diskgroup_disks="asmdisk/ocr1,asmdisk/ocr2"
+asm_diskgroup_disks=""
+
+# Disk group created during GI install (default OCR)
+asm_diskgroup_name="OCR"
+
+# Redundancy: NORMAL | HIGH | EXTERNAL (default EXTERNAL)
+asm_diskgroup_redundancy="EXTERNAL"
+
+# AU size in MB (default 4, unit is always M)
+asm_diskgroup_ausize="4"
+
+# SYSASM password; leave empty to auto-generate (letters and digits only)
+# asm_passwd=""
+
 use_multipathd="0"
-
-# Required for rac (OCR/Voting)
-# asm_ocr_dg="OCR:sdb,scsi-36000...,asm_ocr1+sdc,scsi-36000...,asm_ocr2"
-asm_ocr_dg=""
-
-# Required for asm standalone / optional for rac (data disk groups)
-# asm_dat_dg="DATA:sdd,scsi-36000...,asm_data1+sde,scsi-36000...,asm_data2"
-asm_dat_dg=""
 
 # ==================== System configuration ====================
 # Oracle available memory (MiB/GiB); leave empty for auto-calculation

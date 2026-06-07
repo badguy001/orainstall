@@ -48,10 +48,22 @@ install_gi_software() {
     prereq_flags=$(get_installer_prereq_flags "$gi_version")
     log_info "Installer prereq ignore flags ($gi_version): $prereq_flags"
 
-    run_as_grid "cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}" \
-        2>&1 | tee -a "$LOG_FILE" || die "GI software installation failed"
+    local ohasd_monitor=0
+    if need_gi_ohasd_inittab_fix; then
+        start_gi_ohasd_inittab_monitor
+        ohasd_monitor=1
+    fi
+
+    if ! run_as_grid "cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}" \
+            2>&1 | tee -a "$LOG_FILE"; then
+        [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
+        die "GI software installation failed"
+    fi
 
     run_gi_root_scripts
+
+    [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
+
     log_info "Grid Infrastructure installation complete"
 }
 
@@ -78,56 +90,4 @@ run_gi_root_scripts() {
                 "${gi_home}/root.sh" 2>&1 | tee -a "$LOG_FILE" || true
         done
     fi
-}
-
-create_asm_diskgroups() {
-    if ! need_asm_storage; then
-        return 0
-    fi
-    if [[ "$run_mode" == "$RUN_MODE_SOFTWARE" ]]; then
-        return 0
-    fi
-
-    [[ -x "${gi_home}/bin/asmca" ]] || { log_warn "asmca not found; skipping disk group creation"; return 0; }
-
-    local dg_spec dg_name disks disk_list
-    local all_dgs=()
-
-    # OCR disk group may already be created during installation
-    if [[ -v ASM_DAT_DGS && ${#ASM_DAT_DGS[@]} -gt 0 ]]; then
-        for dg_spec in "${ASM_DAT_DGS[@]}"; do
-            [[ -z "$dg_spec" ]] && continue
-            all_dgs+=("$dg_spec")
-        done
-    fi
-
-    if [[ -v ASM_OCR_DGS && ${#ASM_OCR_DGS[@]} -gt 0 ]]; then
-        for dg_spec in "${ASM_OCR_DGS[@]}"; do
-            [[ -z "$dg_spec" ]] && continue
-            dg_name=$(parse_diskgroup_for_asmca "$dg_spec")
-            if run_as_grid "${gi_home}/bin/asmcmd lsdg 2>/dev/null | grep -qw ${dg_name}"; then
-                log_info "ASM disk group $dg_name already exists"
-                continue
-            fi
-            all_dgs+=("$dg_spec")
-        done
-    fi
-
-    for dg_spec in "${all_dgs[@]}"; do
-        [[ -z "$dg_spec" ]] && continue
-        dg_name=$(parse_diskgroup_for_asmca "$dg_spec")
-        disk_list=$(get_diskgroup_disks "$dg_spec")
-
-        log_info "Creating ASM disk group: $dg_name disks=$disk_list"
-        run_as_grid "
-            export ORACLE_HOME=$gi_home
-            \$ORACLE_HOME/bin/asmca -silent \
-                -createDiskGroup \
-                -diskGroupName ${dg_name} \
-                -diskList ${disk_list} \
-                -redundancy EXTERNAL \
-                -au_size 4 \
-                -sysAsmPassword ${gi_pwd}
-        " 2>&1 | tee -a "$LOG_FILE" || log_warn "Disk group $dg_name creation may have failed"
-    done
 }

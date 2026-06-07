@@ -42,6 +42,8 @@ source "$SCRIPT_DIR/lib/ssh_setup.sh"
 source "$SCRIPT_DIR/lib/rsp.sh"
 # shellcheck source=lib/emagent_fix.sh
 source "$SCRIPT_DIR/lib/emagent_fix.sh"
+# shellcheck source=lib/gi_ohasd_fix.sh
+source "$SCRIPT_DIR/lib/gi_ohasd_fix.sh"
 # shellcheck source=lib/gi_install.sh
 source "$SCRIPT_DIR/lib/gi_install.sh"
 # shellcheck source=lib/db_install.sh
@@ -109,7 +111,6 @@ install_software_stack() {
 }
 
 create_database_stack() {
-    create_asm_diskgroups
     create_database
     configure_listener
     setup_autostart

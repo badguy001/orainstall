@@ -237,7 +237,7 @@ apply_patch_auto_subdirs_to_home() {
         log_info "Applying patch (opatch auto) to $oracle_home (root, dir=$subdir)"
 
         ORACLE_HOME="$oracle_home" \
-            "${oracle_home}/OPatch/opatch" auto -silent "$subdir" -oh "$oracle_home" \
+            "${oracle_home}/OPatch/opatch" auto "$subdir" -oh "$oracle_home" \
             2>&1 | tee -a "$LOG_FILE" || log_warn "opatch auto may have failed: $subdir -> $oracle_home"
     done
 

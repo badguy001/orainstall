@@ -134,6 +134,24 @@ load_and_validate_config() {
     os_iso_file="${os_iso_file:-}"
     patch_files="${patch_files:-}"
     opatch_files="${opatch_files:-}"
+    asm_disk_string="${asm_disk_string:-}"
+    ignore_disk_wwid="${ignore_disk_wwid:-0}"
+    case "${ignore_disk_wwid,,}" in
+        1|true|yes) ignore_disk_wwid=1 ;;
+        *) ignore_disk_wwid=0 ;;
+    esac
+    disks_use_by_asm="${disks_use_by_asm:-}"
+    asm_diskgroup_name="${asm_diskgroup_name:-OCR}"
+    asm_diskgroup_disks="${asm_diskgroup_disks:-}"
+    asm_diskgroup_redundancy="${asm_diskgroup_redundancy:-EXTERNAL}"
+    asm_diskgroup_ausize="${asm_diskgroup_ausize:-4}"
+    asm_passwd="${asm_passwd:-}"
+
+    if need_gi && [[ -z "$asm_passwd" ]]; then
+        asm_passwd=$(generate_alphanumeric_password 16)
+        log_info "Auto-generated asm_passwd (see log)"
+        log_secret "asm_passwd" "$asm_passwd"
+    fi
 
     local db_ver_path gi_ver_path
     db_ver_path=$(version_to_path "$db_version")
@@ -181,18 +199,19 @@ load_and_validate_config() {
         [[ -n "${root_pwd:-}" ]]       || die "root_pwd is required for rac mode"
         [[ -n "${cluster_name:-}" ]]    || die "cluster_name (cluser_name) is required for rac mode"
         [[ -n "${ora_net:-}" ]]         || die "ora_net is required for rac mode"
-        [[ -n "${asm_ocr_dg:-}" ]]      || die "asm_ocr_dg is required for rac mode"
     fi
 
-    if [[ "$ora_type" == "asm" ]]; then
-        [[ -n "${asm_dat_dg:-}" ]] || die "asm_dat_dg is required for standalone asm mode"
+    if [[ "$ora_type" == "asm" || "$ora_type" == "rac" ]]; then
+        [[ -n "${disks_use_by_asm:-}" ]]      || die "disks_use_by_asm is required for asm/rac mode"
+        [[ -n "${asm_diskgroup_disks:-}" ]]   || die "asm_diskgroup_disks is required for asm/rac mode"
+        [[ -n "${asm_disk_string:-}" ]]       || die "asm_disk_string is required for asm/rac mode"
     fi
 
     # Parse ora_net
     parse_ora_net
 
-    # Parse ASM disk groups
-    parse_asm_diskgroups
+    # Parse ASM disk and disk group configuration
+    parse_asm_config
 
     # Parse install file lists
     IFS=',' read -ra DB_INSTALL_FILES <<< "${db_install_file}"
@@ -214,6 +233,8 @@ load_and_validate_config() {
     export ora_type db_version gi_version run_mode gi_user gi_pwd db_user db_pwd
     export db_home db_base gi_home gi_base memory_for_oracle group_mode oinstall_group
     export use_multipathd cluster_name root_pwd ntp_servers os_iso_file patch_files opatch_files
+    export asm_disk_string ignore_disk_wwid disks_use_by_asm asm_diskgroup_name
+    export asm_diskgroup_disks asm_diskgroup_redundancy asm_diskgroup_ausize asm_passwd
 }
 
 parse_ora_net() {
@@ -226,20 +247,76 @@ parse_ora_net() {
     read -ra ORA_NET_NODES <<< "$ora_net"
 }
 
-parse_asm_diskgroups() {
-    ASM_OCR_DGS=()
-    ASM_DAT_DGS=()
+parse_asm_diskgroup_ausize() {
+    local val="${1:-4}"
+    val="${val// /}"
 
-    if [[ -n "${asm_ocr_dg:-}" ]]; then
-        local IFS='#'
-        read -ra ASM_OCR_DGS <<< "$asm_ocr_dg"
-    fi
-    if [[ -n "${asm_dat_dg:-}" ]]; then
-        local IFS='#'
-        read -ra ASM_DAT_DGS <<< "$asm_dat_dg"
+    case "$val" in
+        ''|*[!0-9]*)
+            die "Invalid asm_diskgroup_ausize: $val (numeric MB value, example: 4)"
+            ;;
+    esac
+    echo "$val"
+}
+
+validate_asm_diskgroup_disks() {
+    local disk_entry disk_name wwid asm_disk_name dg_disk dg_path known_path
+    local -a known_asm_paths=()
+    local found=0
+
+    for disk_entry in "${ASM_DISK_ENTRIES[@]}"; do
+        [[ -z "$disk_entry" ]] && continue
+        IFS=',' read -r disk_name wwid asm_disk_name <<< "$disk_entry"
+        asm_disk_name="${asm_disk_name:-$disk_name}"
+        known_path=$(normalize_asm_disk_dev_path "$asm_disk_name")
+        known_asm_paths+=("$known_path")
+    done
+
+    for dg_disk in "${ASM_DISKGROUP_DISK_LIST[@]}"; do
+        dg_path=$(normalize_asm_disk_dev_path "$dg_disk")
+        found=0
+        for known_path in "${known_asm_paths[@]}"; do
+            if [[ "$dg_path" == "$known_path" ]]; then
+                found=1
+                break
+            fi
+        done
+        [[ $found -eq 1 ]] || die "asm_diskgroup_disks entry not found in disks_use_by_asm: $dg_disk"
+    done
+}
+
+parse_asm_config() {
+    ASM_DISK_ENTRIES=()
+    ASM_DISKGROUP_DISK_LIST=()
+
+    if [[ -n "${disks_use_by_asm:-}" ]]; then
+        local IFS='+'
+        read -ra ASM_DISK_ENTRIES <<< "$disks_use_by_asm"
     fi
 
-    export ASM_OCR_DGS ASM_DAT_DGS
+    if [[ -n "${asm_diskgroup_disks:-}" ]]; then
+        local disk_spec dg_path
+        IFS=',' read -ra _dg_disk_specs <<< "$asm_diskgroup_disks"
+        for disk_spec in "${_dg_disk_specs[@]}"; do
+            [[ -z "${disk_spec// /}" ]] && continue
+            dg_path=$(normalize_asm_disk_dev_path "$disk_spec") || \
+                die "Invalid asm_diskgroup_disks entry: $disk_spec"
+            ASM_DISKGROUP_DISK_LIST+=("$dg_path")
+        done
+    fi
+
+    case "${asm_diskgroup_redundancy^^}" in
+        NORMAL|HIGH|EXTERNAL) asm_diskgroup_redundancy="${asm_diskgroup_redundancy^^}" ;;
+        *) die "Invalid asm_diskgroup_redundancy: $asm_diskgroup_redundancy (NORMAL|HIGH|EXTERNAL)" ;;
+    esac
+
+    ASM_DISKGROUP_AUSIZE_MB=$(parse_asm_diskgroup_ausize "$asm_diskgroup_ausize")
+
+    if need_asm_storage && [[ ${#ASM_DISK_ENTRIES[@]} -gt 0 && ${#ASM_DISKGROUP_DISK_LIST[@]} -gt 0 ]]; then
+        validate_asm_diskgroup_disks
+    fi
+
+    export ASM_DISK_ENTRIES ASM_DISKGROUP_DISK_LIST ASM_DISKGROUP_AUSIZE_MB
 }
 
 need_gi() {
