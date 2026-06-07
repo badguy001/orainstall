@@ -69,13 +69,13 @@ start_gi_ohasd_inittab_monitor() {
 }
 
 stop_gi_ohasd_inittab_monitor() {
-    if [[ -n "${GI_OHASD_MONITOR_PID:-}" ]] && kill -0 "$GI_OHASD_MONITOR_PID" 2>/dev/null; then
+    if [[ -n "${GI_OHASD_MONITOR_PID:-}" ]] && kill -9 "$GI_OHASD_MONITOR_PID" 2>/dev/null; then
         kill "$GI_OHASD_MONITOR_PID" 2>/dev/null || true
         wait "$GI_OHASD_MONITOR_PID" 2>/dev/null || true
     fi
     GI_OHASD_MONITOR_PID=""
 
-    kill_init_ohasd_processes
+    # kill_init_ohasd_processes
 }
 
 kill_init_ohasd_processes() {
