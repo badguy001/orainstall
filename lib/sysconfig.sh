@@ -19,9 +19,10 @@ configure_kernel_params() {
     backup_file "$sysctl_file"
 
     local mem_mib="$memory_for_oracle"
-    local shmmax shmall
+    local shmmax shmall min_free_kbytes
     shmmax=$(( mem_mib * 1024 * 1024 ))
     shmall=$(( shmmax / 4096 ))
+    min_free_kbytes=$(calc_min_free_kbytes)
 
     cat > "$sysctl_file" <<EOF
 # Oracle kernel parameters - orainstall
@@ -31,6 +32,7 @@ kernel.shmmni = 4096
 kernel.shmmax = $shmmax
 kernel.shmall = $shmall
 kernel.sem = 250 32000 100 128
+vm.min_free_kbytes = $min_free_kbytes
 net.ipv4.ip_local_port_range = 9000 65500
 net.core.rmem_default = 262144
 net.core.rmem_max = 4194304
@@ -47,6 +49,29 @@ EOF
     fi
 
     sysctl -p "$sysctl_file" 2>/dev/null || sysctl -p 2>/dev/null || log_warn "Some sysctl parameters did not take effect; please check"
+}
+
+calc_min_free_kbytes() {
+    local numa_nodes mem_kb min_free
+
+    numa_nodes=$(lscpu 2>/dev/null | awk '/^NUMA node\(s\):/ {print $3; exit}')
+    if [[ -z "${numa_nodes:-}" || "$numa_nodes" -eq 0 ]]; then
+        numa_nodes=$(ls -d /sys/devices/system/node/node[0-9]* 2>/dev/null | wc -l)
+        numa_nodes="${numa_nodes// /}"
+    fi
+    if [[ -z "${numa_nodes:-}" || "$numa_nodes" -eq 0 ]]; then
+        numa_nodes=1
+    fi
+
+    mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    mem_kb="${mem_kb:-0}"
+
+    # numa_nodes * 0.4% * physical_memory(KiB)
+    min_free=$(( numa_nodes * mem_kb * 4 / 1000 ))
+    [[ $min_free -lt 1 ]] && min_free=1
+
+    log_info "vm.min_free_kbytes=${min_free} (numa_nodes=${numa_nodes}, mem_kb=${mem_kb}, 0.4%/node)"
+    echo "$min_free"
 }
 
 configure_hugepages() {

@@ -4,6 +4,8 @@
 configure_network() {
     log_info "Configuring network and hosts..."
 
+    configure_lo_mtu
+
     case "$ora_type" in
         oracle|asm)
             configure_standalone_hosts
@@ -135,4 +137,80 @@ build_rac_nodelist() {
     get_rac_node_hostnames
     local IFS=','
     echo "${RAC_NODE_HOSTS[*]}"
+}
+
+need_lo_mtu_16436() {
+    case "${OS_ID,,}" in
+        rhel|centos)
+            [[ "$OS_MAJOR" -ge 7 ]]
+            ;;
+        openeuler|openeuler|kylin)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+configure_lo_mtu() {
+    need_lo_mtu_16436 || return 0
+
+    log_info "Setting loopback (lo) MTU to 16436 (OS: ${OS_NAME})"
+
+    if ip link set dev lo mtu 16436 2>/dev/null; then
+        log_info "Applied lo MTU 16436 (runtime)"
+    else
+        log_warn "Failed to set lo MTU 16436 at runtime"
+    fi
+
+    persist_lo_mtu_16436
+}
+
+persist_lo_mtu_16436() {
+    local ifcfg="/etc/sysconfig/network-scripts/ifcfg-lo"
+
+    if [[ -d /etc/sysconfig/network-scripts ]]; then
+        if [[ -f "$ifcfg" ]]; then
+            backup_file "$ifcfg"
+            if grep -q '^MTU=' "$ifcfg" 2>/dev/null; then
+                sed -i 's/^MTU=.*/MTU=16436/' "$ifcfg"
+            else
+                echo "MTU=16436" >> "$ifcfg"
+            fi
+        else
+            cat > "$ifcfg" <<'EOF'
+DEVICE=lo
+IPADDR=127.0.0.1
+NETMASK=255.0.0.0
+NETWORK=127.0.0.0
+ONBOOT=yes
+MTU=16436
+EOF
+        fi
+        log_info "Persisted lo MTU in $ifcfg"
+        ifup lo 2>/dev/null || true
+        return 0
+    fi
+
+    if is_systemd; then
+        local unit="/etc/systemd/system/oracle-lo-mtu.service"
+        cat > "$unit" <<'EOF'
+[Unit]
+Description=Set loopback MTU for Oracle
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/ip link set dev lo mtu 16436
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable oracle-lo-mtu.service 2>/dev/null || true
+        log_info "Persisted lo MTU via systemd unit: $unit"
+    fi
 }
