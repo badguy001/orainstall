@@ -112,8 +112,8 @@ install_software_stack() {
 
 create_database_stack() {
     create_database
-    configure_listener
-    setup_autostart
+    # configure_listener
+    # setup_autostart
 }
 
 main() {
