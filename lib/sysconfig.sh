@@ -10,6 +10,7 @@ configure_system() {
     disable_firewall
     disable_zeroconf
     configure_logind_remove_ipc
+    configure_tmpfiles_oracle
     configure_directories
 }
 
@@ -383,6 +384,36 @@ configure_logind_remove_ipc() {
 
     if is_systemd && systemctl list-unit-files 2>/dev/null | grep -q systemd-logind; then
         systemctl restart systemd-logind 2>/dev/null || log_warn "Failed to restart systemd-logind; reboot or restart manually for RemoveIPC change"
+    fi
+}
+
+configure_tmpfiles_oracle() {
+    if ! is_systemd; then
+        return 0
+    fi
+
+    local tmpfiles_dir="/etc/tmpfiles.d"
+    local tmpfiles_file="${tmpfiles_dir}/99-oracle.conf"
+
+    mkdir -p "$tmpfiles_dir"
+    [[ -f "$tmpfiles_file" ]] && backup_file "$tmpfiles_file"
+
+    cat > "$tmpfiles_file" <<'EOF'
+# Oracle temporary files - exclude from systemd tmpfiles cleanup
+x /tmp/.oracle*
+x /var/tmp/.oracle*
+x /usr/tmp/.oracle*
+EOF
+
+    log_info "Configured systemd tmpfiles.d: $tmpfiles_file"
+
+    # if command -v systemd-tmpfiles &>/dev/null; then
+    #     systemd-tmpfiles --create "$tmpfiles_file" 2>/dev/null || true
+    # fi
+
+    if systemctl list-unit-files 2>/dev/null | grep -q systemd-tmpfiles-clean.timer; then
+        systemctl restart systemd-tmpfiles-clean.timer 2>/dev/null || \
+            log_warn "Failed to restart systemd-tmpfiles-clean.timer"
     fi
 }
 
