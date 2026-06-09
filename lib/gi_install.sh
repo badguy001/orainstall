@@ -62,6 +62,8 @@ install_gi_software() {
 
     run_gi_root_scripts
 
+    run_gi_config_tool_all_commands "$rsp_file"
+
     [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
 
     log_info "Grid Infrastructure installation complete"
@@ -90,4 +92,31 @@ run_gi_root_scripts() {
                 "${gi_home}/root.sh" 2>&1 | tee -a "$LOG_FILE" || true
         done
     fi
+}
+
+run_gi_config_tool_all_commands() {
+    local rsp_file="$1"
+    local config_tool
+
+    if ! is_asm_standalone || ! is_legacy_gi_version; then
+        return 0
+    fi
+
+    rsp_file=$(abs_path "$rsp_file") || die "Invalid GI response file path: $rsp_file"
+    [[ -f "$rsp_file" ]] || die "GI response file not found: $rsp_file"
+
+    config_tool="${gi_home}/cfgtoollogs/configToolAllCommands"
+    if [[ ! -f "$config_tool" ]]; then
+        log_warn "configToolAllCommands not found; skipping ASM/listener configuration: $config_tool"
+        return 0
+    fi
+    if [[ ! -x "$config_tool" ]]; then
+        chmod +x "$config_tool" 2>/dev/null || true
+    fi
+
+    log_info "Running configToolAllCommands for 11g ASM standalone (RESPONSE_FILE=$rsp_file)"
+    run_as_grid "
+        export ORACLE_HOME=${gi_home}
+        \${ORACLE_HOME}/cfgtoollogs/configToolAllCommands RESPONSE_FILE=${rsp_file}
+    " 2>&1 | tee -a "$LOG_FILE" || die "configToolAllCommands failed (11g ASM standalone)"
 }
