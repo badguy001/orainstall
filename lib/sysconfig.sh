@@ -9,6 +9,7 @@ configure_system() {
     disable_selinux
     disable_firewall
     disable_zeroconf
+    configure_logind_remove_ipc
     configure_directories
 }
 
@@ -356,6 +357,33 @@ disable_zeroconf() {
 
     # Remove existing zeroconf route
     ip route del 169.254.0.0/16 dev lo 2>/dev/null || true
+}
+
+configure_logind_remove_ipc() {
+    local logind_conf="/etc/systemd/logind.conf"
+
+    [[ -f "$logind_conf" ]] || return 0
+    grep -q 'RemoveIPC' "$logind_conf" 2>/dev/null || return 0
+
+    backup_file "$logind_conf"
+
+    # Active or commented RemoveIPC= lines -> RemoveIPC=no
+    sed -i '/RemoveIPC=/s/.*/RemoveIPC=no/' "$logind_conf"
+
+    # RemoveIPC mentioned only in comments without a key line: add explicit setting
+    if ! grep -q '^RemoveIPC=no' "$logind_conf" 2>/dev/null; then
+        if grep -q '^\[Login\]' "$logind_conf" 2>/dev/null; then
+            sed -i '/^\[Login\]/a RemoveIPC=no' "$logind_conf"
+        else
+            printf '\n[Login]\nRemoveIPC=no\n' >> "$logind_conf"
+        fi
+    fi
+
+    log_info "Set RemoveIPC=no in $logind_conf"
+
+    if is_systemd && systemctl list-unit-files 2>/dev/null | grep -q systemd-logind; then
+        systemctl restart systemd-logind 2>/dev/null || log_warn "Failed to restart systemd-logind; reboot or restart manually for RemoveIPC change"
+    fi
 }
 
 setup_autostart() {
