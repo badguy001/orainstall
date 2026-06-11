@@ -75,7 +75,7 @@ stop_gi_ohasd_inittab_monitor() {
     fi
     GI_OHASD_MONITOR_PID=""
 
-    # kill_init_ohasd_processes
+    kill_init_ohasd_processes
 }
 
 kill_init_ohasd_processes() {
