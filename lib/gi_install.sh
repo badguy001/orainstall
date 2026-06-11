@@ -62,7 +62,7 @@ install_gi_software() {
 
     run_gi_root_scripts
 
-    run_gi_config_tool_all_commands "$rsp_file"
+    run_gi_config_tool_all_commands
 
     [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
 
@@ -95,15 +95,17 @@ run_gi_root_scripts() {
 }
 
 run_gi_config_tool_all_commands() {
-    local rsp_file="$1"
-    local config_tool
+    local asm_pwd_rsp config_tool
 
     if ! is_asm_standalone || ! is_legacy_gi_version; then
         return 0
     fi
 
-    rsp_file=$(abs_path "$rsp_file") || die "Invalid GI response file path: $rsp_file"
-    [[ -f "$rsp_file" ]] || die "GI response file not found: $rsp_file"
+    [[ -n "${asm_passwd:-}" ]] || die "asm_passwd is required for 11g ASM configToolAllCommands"
+
+    asm_pwd_rsp=$(generate_asm_password_rsp)
+    asm_pwd_rsp=$(abs_path "$asm_pwd_rsp") || die "Invalid ASM password response file path: $asm_pwd_rsp"
+    [[ -f "$asm_pwd_rsp" ]] || die "ASM password response file not found: $asm_pwd_rsp"
 
     config_tool="${gi_home}/cfgtoollogs/configToolAllCommands"
     if [[ ! -f "$config_tool" ]]; then
@@ -114,9 +116,23 @@ run_gi_config_tool_all_commands() {
         chmod +x "$config_tool" 2>/dev/null || true
     fi
 
-    log_info "Running configToolAllCommands for 11g ASM standalone (RESPONSE_FILE=$rsp_file)"
+    log_info "Running configToolAllCommands for 11g ASM standalone (RESPONSE_FILE=$asm_pwd_rsp)"
     run_as_grid "
         export ORACLE_HOME=${gi_home}
-        \${ORACLE_HOME}/cfgtoollogs/configToolAllCommands RESPONSE_FILE=${rsp_file}
+        \${ORACLE_HOME}/cfgtoollogs/configToolAllCommands RESPONSE_FILE=${asm_pwd_rsp}
     " 2>&1 | tee -a "$LOG_FILE" || die "configToolAllCommands failed (11g ASM standalone)"
+}
+
+generate_asm_password_rsp() {
+    local rsp_file="$LOG_DIR/asm_password.rsp"
+
+    log_info "Generating ASM password response file: $rsp_file"
+    cat > "$rsp_file" <<EOF
+oracle.assistants.asm|S_ASMPASSWORD=${asm_passwd}
+oracle.assistants.asm|S_ASMMONITORPASSWORD=${asm_passwd}
+EOF
+
+    chown "${gi_user}:${oinstall_group}" "$rsp_file"
+    chmod 600 "$rsp_file"
+    echo "$rsp_file"
 }
