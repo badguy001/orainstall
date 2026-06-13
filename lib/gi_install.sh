@@ -248,8 +248,8 @@ resolve_asm_alert_trace_dir() {
     local d
 
     for d in \
-        "${gi_base}/diag/asm/+asm/${asm_sid}/trace" \
-        "${gi_base}/diag/asm/+ASM/${asm_sid}/trace"; do
+        "${gi_base}/diag/asm/+ASM/${asm_sid}/trace" \
+        "${gi_base}/diag/asm/+asm/${asm_sid}/trace"; do
         [[ -d "$d" ]] && { echo "$d"; return 0; }
     done
 
@@ -265,7 +265,7 @@ create_gi_user_home_symlink() {
 
     target_dir=$(abs_path "$target_dir") || return 1
     ln -sfn "$target_dir" "${gi_home_dir}/${link_name}"
-    chown -h "${gi_user}:${oinstall_group}" "${gi_home_dir}/${link_name}" 2>/dev/null || true
+    # chown -h "${gi_user}:${oinstall_group}" "${gi_home_dir}/${link_name}" 2>/dev/null || true
     log_info "Created symlink ~/${link_name} -> ${target_dir}"
 }
 
@@ -275,27 +275,31 @@ configure_gi_user_post_install() {
     gi_home_dir=$(getent passwd "$gi_user" 2>/dev/null | cut -d: -f6)
     [[ -n "$gi_home_dir" ]] || gi_home_dir="/home/$gi_user"
 
-    if ! asm_sid=$(get_local_asm_sid_from_oratab); then
-        log_warn "Local ASM instance SID not found in /etc/oratab; skipping GI user ASM configuration"
-        return 0
+    log_info "Configuring ${gi_user} post-install environment and alert log symlinks"
+
+    if asm_sid=$(get_local_asm_sid_from_oratab); then
+        export GI_ASM_SID="$asm_sid"
+        log_info "Local ASM instance SID from /etc/oratab: ${GI_ASM_SID}"
+        write_gi_user_profile
+    else
+        log_warn "Local ASM instance SID not found in /etc/oratab; skipping ORACLE_SID in gi user profile"
     fi
-
-    export GI_ASM_SID="$asm_sid"
-    log_info "Configuring ${gi_user} post-install (ASM SID=${GI_ASM_SID})"
-
-    write_gi_user_profile
 
     hostname=$(get_local_hostname)
 
     if crs_trace_dir=$(resolve_crs_alert_trace_dir "$hostname"); then
         create_gi_user_home_symlink "$gi_home_dir" "crs_trace" "$crs_trace_dir"
+        create_gi_user_home_symlink "$gi_home_dir" `basename "$crs_trace_dir/alert*log"` "$crs_trace_dir/alert*log"
     else
         log_warn "CRS alert trace directory not found for hostname=${hostname}"
     fi
 
-    if asm_trace_dir=$(resolve_asm_alert_trace_dir "$asm_sid"); then
-        create_gi_user_home_symlink "$gi_home_dir" "${asm_sid}_trace" "$asm_trace_dir"
-    else
-        log_warn "ASM alert trace directory not found for ASM SID=${asm_sid}"
+    if [[ -n "${asm_sid:-}" ]]; then
+        if asm_trace_dir=$(resolve_asm_alert_trace_dir "$asm_sid"); then
+            create_gi_user_home_symlink "$gi_home_dir" "${asm_sid}_trace" "$asm_trace_dir"
+            create_gi_user_home_symlink "$gi_home_dir" `basename $asm_trace_dir/alert*log` "$asm_trace_dir/alert*log"
+        else
+            log_warn "ASM alert trace directory not found for ASM SID=${asm_sid}"
+        fi
     fi
 }
