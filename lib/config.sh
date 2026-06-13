@@ -199,6 +199,9 @@ load_and_validate_config() {
         [[ -n "${root_pwd:-}" ]]       || die "root_pwd is required for rac mode"
         [[ -n "${cluster_name:-}" ]]    || die "cluster_name (cluser_name) is required for rac mode"
         [[ -n "${ora_net:-}" ]]         || die "ora_net is required for rac mode"
+        [[ -n "${scanip:-}" ]]          || die "scanip is required for rac mode"
+        scan_name="${scan_name:-${cluster_name}-scan}"
+        parse_scan_config
     fi
 
     if [[ "$ora_type" == "asm" || "$ora_type" == "rac" ]]; then
@@ -233,6 +236,7 @@ load_and_validate_config() {
     export ora_type db_version gi_version run_mode gi_user gi_pwd db_user db_pwd
     export db_home db_base gi_home gi_base memory_for_oracle group_mode oinstall_group
     export use_multipathd cluster_name root_pwd ntp_servers os_iso_file patch_files opatch_files
+    export scan_name scanip
     export asm_disk_string ignore_disk_wwid disks_use_by_asm asm_diskgroup_name
     export asm_diskgroup_disks asm_diskgroup_redundancy asm_diskgroup_ausize asm_passwd
 }
@@ -245,6 +249,23 @@ parse_ora_net() {
 
     local IFS=','
     read -ra ORA_NET_NODES <<< "$ora_net"
+}
+
+parse_scan_config() {
+    local ip
+    SCAN_IPS=()
+
+    local IFS=','
+    read -ra _scan_ip_list <<< "$scanip"
+    for ip in "${_scan_ip_list[@]}"; do
+        ip="${ip// /}"
+        [[ -n "$ip" ]] || continue
+        [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "Invalid scanip address: $ip"
+        SCAN_IPS+=("$ip")
+    done
+
+    [[ ${#SCAN_IPS[@]} -gt 0 ]] || die "scanip must contain at least one IP address for rac mode"
+    export SCAN_IPS
 }
 
 parse_asm_diskgroup_ausize() {

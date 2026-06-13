@@ -66,6 +66,14 @@ cluster_name=""
 # cluser_name=""            # Alias for cluster_name
 root_pwd=""
 
+# SCAN VIP addresses (comma-separated, required for rac)
+# scanip="192.168.1.30,192.168.1.31,192.168.1.32"
+scanip=""
+
+# SCAN name (default: ${cluster_name}-scan)
+# scan_name="rac19c-scan"
+scan_name=""
+
 # ==================== ASM storage ====================
 # disks_use_by_asm: all ASM disks for udev rules (required for asm/rac)
 # Format: disk_name,WWID,asm_disk_name+disk_name2,WWID2,asm_disk_name2

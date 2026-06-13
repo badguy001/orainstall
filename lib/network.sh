@@ -86,6 +86,21 @@ configure_rac_hosts() {
 
         log_info "RAC node: $hostname pub=$pub_ip vip=${vip:-N/A} priv=${priv_ips:-N/A}"
     done
+
+    configure_rac_scan_hosts
+}
+
+configure_rac_scan_hosts() {
+    local ip
+
+    [[ -n "${scan_name:-}" ]] || return 0
+    [[ ${#SCAN_IPS[@]} -gt 0 ]] || return 0
+
+    for ip in "${SCAN_IPS[@]}"; do
+        set_hosts_entry "$ip" "$scan_name"
+    done
+
+    log_info "SCAN hosts: $scan_name -> ${SCAN_IPS[*]}"
 }
 
 set_hosts_entry() {

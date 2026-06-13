@@ -206,6 +206,9 @@ set_gi_rsp_params() {
     rsp_set_param "$dest" "oracle.install.asm.OSASM" "$asm_osasm"
     rsp_set_param "$dest" "oracle.install.crs.config.gpnp.scanName" "$scan_name"
     rsp_set_param "$dest" "oracle.install.crs.config.gpnp.scanPort" "1521"
+    if is_rac; then
+        rsp_set_param "$dest" "oracle.install.crs.config.scanType" "LOCAL_SCAN"
+    fi
     rsp_set_param "$dest" "oracle.install.crs.config.clusterName" "$cluster_name_cfg"
     rsp_set_param "$dest" "oracle.install.crs.config.gpnp.configureGNS" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.autoConfigureClusterNodeVIP" "false"
@@ -258,7 +261,7 @@ render_gi_install_rsp() {
     if is_rac; then
         install_option="CRS_CONFIG"
         cluster_nodes=$(build_rac_nodelist)
-        scan_name="${cluster_name}-scan"
+        scan_name="${scan_name:-${cluster_name}-scan}"
         cluster_name_cfg="$cluster_name"
     fi
 
