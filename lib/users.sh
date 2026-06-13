@@ -63,6 +63,17 @@ create_oracle_users() {
         fi
     fi
 
+    if is_asm_standalone; then
+        case ",${db_groups}," in
+            *,asmdba,*)
+                ;;
+            *)
+                db_groups="${db_groups},asmdba"
+                log_info "ASM standalone: adding ASMDBA group (asmdba) to ${db_user}"
+                ;;
+        esac
+    fi
+
     create_user "$db_user" "$next_uid" "$oinstall_group" "$db_groups" "/home/$db_user"
     echo "${db_user}:${db_pwd}" | chpasswd
 
