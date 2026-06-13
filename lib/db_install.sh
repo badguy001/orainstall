@@ -343,7 +343,7 @@ configure_db_user_post_dbca() {
 
     if db_trace_dir=$(resolve_db_alert_trace_dir "$db_sid"); then
         create_db_user_home_symlink "$db_home_dir" "${db_sid}_trace" "$db_trace_dir"
-        create_db_user_home_symlink "$db_home_dir" `basename "$db_trace_dir/alert*.log"` "$db_trace_dir/alert*.log"
+        create_db_user_home_symlink "$db_home_dir" `basename "$db_trace_dir"/alert*.log` "$db_trace_dir"/alert*.log
     else
         log_warn "Database alert trace directory not found for DB SID=${db_sid}"
     fi

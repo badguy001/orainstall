@@ -181,7 +181,7 @@ relocate_asm_spfile_to_filesystem() {
         mkdir -p ${gi_home}/dbs
         [[ -x \$ORACLE_HOME/bin/asmcmd ]] || exit 1
         \$ORACLE_HOME/bin/asmcmd spcopy -u '${spfile_path}' '${local_spfile}'
-        \$ORACLE_HOME/bin/srvctl config asm -p '${local_spfile}'
+        \$ORACLE_HOME/bin/srvctl modify asm -p '${local_spfile}'
         \$ORACLE_HOME/bin/srvctl stop asm -f
         \$ORACLE_HOME/bin/srvctl start asm
     " 2>&1 | tee -a "$LOG_FILE" || die "Failed to relocate ASM spfile to ${local_spfile}"
@@ -289,7 +289,7 @@ configure_gi_user_post_install() {
 
     if crs_trace_dir=$(resolve_crs_alert_trace_dir "$hostname"); then
         create_gi_user_home_symlink "$gi_home_dir" "crs_trace" "$crs_trace_dir"
-        create_gi_user_home_symlink "$gi_home_dir" `basename "$crs_trace_dir/alert*log"` "$crs_trace_dir/alert*log"
+        create_gi_user_home_symlink "$gi_home_dir" `basename "$crs_trace_dir"/alert*log` "$crs_trace_dir"/alert*log
     else
         log_warn "CRS alert trace directory not found for hostname=${hostname}"
     fi
@@ -297,7 +297,7 @@ configure_gi_user_post_install() {
     if [[ -n "${asm_sid:-}" ]]; then
         if asm_trace_dir=$(resolve_asm_alert_trace_dir "$asm_sid"); then
             create_gi_user_home_symlink "$gi_home_dir" "${asm_sid}_trace" "$asm_trace_dir"
-            create_gi_user_home_symlink "$gi_home_dir" `basename $asm_trace_dir/alert*log` "$asm_trace_dir/alert*log"
+            create_gi_user_home_symlink "$gi_home_dir" `basename "$asm_trace_dir"/alert*log` "$asm_trace_dir"/alert*log
         else
             log_warn "ASM alert trace directory not found for ASM SID=${asm_sid}"
         fi
