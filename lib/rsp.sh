@@ -269,3 +269,169 @@ render_gi_install_rsp() {
         "$cluster_name_cfg" "$asm_osdba" "$asm_osoper" "$asm_osasm" "$asm_dg_disks" "$asm_disk_string" \
         "$asm_passwd" "$asm_diskgroup_name" "$asm_diskgroup_redundancy" "$ASM_DISKGROUP_AUSIZE_MB"
 }
+
+get_dbca_rsp_template() {
+    local ver="${1:-$db_version}"
+    case "$ver" in
+        11gR1|11gR2) echo "${SCRIPT_DIR}/config/templates/dbca_11.2.rsp" ;;
+        12cR1)       echo "${SCRIPT_DIR}/config/templates/dbca_12.1.rsp" ;;
+        12cR2)       echo "${SCRIPT_DIR}/config/templates/dbca_12.2.rsp" ;;
+        18c|19c)     echo "${SCRIPT_DIR}/config/templates/dbca_19.rsp" ;;
+        *) die "Unsupported db_version DBCA response template: $ver" ;;
+    esac
+}
+
+is_legacy_dbca_rsp_format() {
+    case "$db_version" in
+        11gR1|11gR2|12cR1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# 11g/12cR1 DBCA templates use [CREATEDATABASE] KEY = "value" sections
+rsp_set_dbca_ini_param() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    local tmp
+
+    tmp=$(mktemp)
+    awk -v key="$key" -v val="$value" '
+    BEGIN { keyu=toupper(key); in_create=0; done=0 }
+    /^\[CREATEDATABASE\]/ { in_create=1 }
+    /^\[/ {
+        if (in_create && $0 !~ /^\[CREATEDATABASE\]/) {
+            in_create=0
+        }
+    }
+    {
+        if (in_create && !done) {
+            line=$0
+            sub(/^[ \t]*#?[ \t]*/, "", line)
+            eq=index(line, "=")
+            if (eq > 0) {
+                k=substr(line, 1, eq - 1)
+                gsub(/[ \t]/, "", k)
+                if (toupper(k) == keyu) {
+                    printf "%s = \"%s\"\n", key, val
+                    done=1
+                    next
+                }
+            }
+        }
+        print
+    }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+set_dbca_rsp_params() {
+    local dest="$1"
+    local db_config_type storage_type data_dest recovery_dest nodelist=""
+    local create_as_cdb="false" pdb_name="" num_pdbs="0"
+    local mem_target="${memory_for_oracle}"
+
+    if is_rac; then
+        db_config_type="RAC"
+        nodelist=$(build_rac_nodelist)
+    else
+        db_config_type="SI"
+    fi
+
+    if need_asm_storage; then
+        storage_type="ASM"
+        data_dest="+DATA"
+        recovery_dest="+FRA"
+    else
+        storage_type="FS"
+        data_dest="$ORACLE_DATA_DIR"
+        recovery_dest="$ORACLE_FRA_DIR"
+    fi
+
+    if is_cdb_supported && [[ "${DB_CREATE_AS_CDB:-1}" == "1" ]]; then
+        create_as_cdb="true"
+        pdb_name="${DB_PDB_NAME:-orclpdb}"
+        num_pdbs="1"
+    fi
+
+    if is_legacy_dbca_rsp_format; then
+        rsp_set_dbca_ini_param "$dest" "GDBNAME" "$ORACLE_SID"
+        rsp_set_dbca_ini_param "$dest" "SID" "$ORACLE_SID"
+        rsp_set_dbca_ini_param "$dest" "TEMPLATENAME" "General_Purpose.dbc"
+        rsp_set_dbca_ini_param "$dest" "SYSPASSWORD" "$db_pwd"
+        rsp_set_dbca_ini_param "$dest" "SYSTEMPASSWORD" "$db_pwd"
+        rsp_set_dbca_ini_param "$dest" "DBSNMPPASSWORD" "$db_pwd"
+        rsp_set_dbca_ini_param "$dest" "EMCONFIGURATION" "NONE"
+        rsp_set_dbca_ini_param "$dest" "DATAFILEDESTINATION" "$data_dest"
+        rsp_set_dbca_ini_param "$dest" "RECOVERYAREADESTINATION" "$recovery_dest"
+        rsp_set_dbca_ini_param "$dest" "STORAGETYPE" "$storage_type"
+        rsp_set_dbca_ini_param "$dest" "CHARACTERSET" "${DB_CHARACTERSET:-AL32UTF8}"
+        rsp_set_dbca_ini_param "$dest" "NATIONALCHARACTERSET" "${DB_NATIONAL_CHARACTERSET:-AL16UTF16}"
+        rsp_set_dbca_ini_param "$dest" "REGISTERWITHDIRSERVICE" "false"
+        rsp_set_dbca_ini_param "$dest" "LISTENERS" "${LISTENER_PORT:-1521}"
+        rsp_set_dbca_ini_param "$dest" "SAMPLESCHEMA" "false"
+        rsp_set_dbca_ini_param "$dest" "MEMORYPERCENTAGE" "40"
+        rsp_set_dbca_ini_param "$dest" "DATABASETYPE" "MULTIPURPOSE"
+        rsp_set_dbca_ini_param "$dest" "AUTOMATICMEMORYMANAGEMENT" "false"
+        rsp_set_dbca_ini_param "$dest" "TOTALMEMORY" "$mem_target"
+
+        if [[ "$db_version" == "12cR1" ]]; then
+            rsp_set_dbca_ini_param "$dest" "DATABASECONFTYPE" "$db_config_type"
+            rsp_set_dbca_ini_param "$dest" "CREATEASCONTAINERDATABASE" "$create_as_cdb"
+            rsp_set_dbca_ini_param "$dest" "NUMBEROFPDBS" "$num_pdbs"
+            rsp_set_dbca_ini_param "$dest" "PDBNAME" "$pdb_name"
+            rsp_set_dbca_ini_param "$dest" "PDBADMINPASSWORD" "$db_pwd"
+            rsp_set_dbca_ini_param "$dest" "RUNCVUCHECKS" "false"
+        fi
+
+        if [[ -n "$nodelist" ]]; then
+            rsp_set_dbca_ini_param "$dest" "NODELIST" "$nodelist"
+        fi
+        return 0
+    fi
+
+    rsp_set_param "$dest" "gdbName" "$ORACLE_SID"
+    rsp_set_param "$dest" "sid" "$ORACLE_SID"
+    rsp_set_param "$dest" "databaseConfigType" "$db_config_type"
+    rsp_set_param "$dest" "nodelist" "$nodelist"
+    rsp_set_param "$dest" "templateName" "General_Purpose.dbc"
+    rsp_set_param "$dest" "sysPassword" "$db_pwd"
+    rsp_set_param "$dest" "systemPassword" "$db_pwd"
+    rsp_set_param "$dest" "emConfiguration" "NONE"
+    rsp_set_param "$dest" "emExpressPort" "5500"
+    rsp_set_param "$dest" "runCVUChecks" "false"
+    rsp_set_param "$dest" "dbsnmpPassword" "$db_pwd"
+    rsp_set_param "$dest" "dvConfiguration" "false"
+    rsp_set_param "$dest" "olsConfiguration" "false"
+    rsp_set_param "$dest" "datafileDestination" "$data_dest"
+    rsp_set_param "$dest" "recoveryAreaDestination" "$recovery_dest"
+    rsp_set_param "$dest" "storageType" "$storage_type"
+    rsp_set_param "$dest" "characterSet" "${DB_CHARACTERSET:-AL32UTF8}"
+    rsp_set_param "$dest" "nationalCharacterSet" "${DB_NATIONAL_CHARACTERSET:-AL16UTF16}"
+    rsp_set_param "$dest" "registerWithDirService" "false"
+    rsp_set_param "$dest" "listeners" "${LISTENER_PORT:-1521}"
+    rsp_set_param "$dest" "sampleSchema" "false"
+    rsp_set_param "$dest" "memoryPercentage" "40"
+    rsp_set_param "$dest" "databaseType" "MULTIPURPOSE"
+    rsp_set_param "$dest" "automaticMemoryManagement" "false"
+    rsp_set_param "$dest" "totalMemory" "$mem_target"
+    rsp_set_param "$dest" "createAsContainerDatabase" "$create_as_cdb"
+    rsp_set_param "$dest" "numberOfPDBs" "$num_pdbs"
+    rsp_set_param "$dest" "pdbName" "$pdb_name"
+    rsp_set_param "$dest" "useLocalUndoForPDBs" "true"
+    rsp_set_param "$dest" "pdbAdminPassword" "$db_pwd"
+}
+
+render_dbca_rsp() {
+    local dest="$1"
+    local template
+
+    template=$(resolve_rsp_template \
+        "$(get_dbca_rsp_template)" \
+        "${DB_INSTALL_DIR:-}" \
+        "dbca_11.2.rsp" "dbca_12.1.rsp" "dbca_12.2.rsp" "dbca_19.rsp" "dbca.rsp")
+
+    log_info "DBCA response template ($db_version): $template -> $dest"
+    cp -a "$template" "$dest"
+    set_dbca_rsp_params "$dest"
+}

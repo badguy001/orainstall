@@ -21,98 +21,11 @@ generate_db_install_rsp() {
 
 generate_dbca_rsp() {
     local rsp_file="$LOG_DIR/dbca.rsp"
-    local mem_target="${memory_for_oracle}"
-    local create_as_cdb="false"
-    local pdb_name=""
-    local num_pdbs=0
-    local storage_type="FS"
-    local nodelist=""
-    local rsp_schema
 
-    if need_asm_storage; then
-        storage_type="ASM"
-    fi
-
-    if is_cdb_supported && [[ "${DB_CREATE_AS_CDB:-1}" == "1" ]]; then
-        create_as_cdb="true"
-        pdb_name="${DB_PDB_NAME:-orclpdb}"
-        num_pdbs=1
-    fi
-
-    if is_rac; then
-        nodelist=$(build_rac_nodelist)
-    fi
-
-    rsp_schema=$(get_dbca_rsp_schema "$db_version")
-    log_info "Generating DBCA response file ($db_version): $rsp_file"
-
-    if is_legacy_db_version; then
-        cat > "$rsp_file" <<EOF
-responseFileVersion=$rsp_schema
-gdbName=$ORACLE_SID
-sid=$ORACLE_SID
-databaseConfigType=$([ "$ora_type" == "rac" ] && echo "RAC" || echo "SI")
-RACOneNodeServiceName=
-policyName=Oracle
-nodelist=$nodelist
-templateName=General_Purpose.dbc
-sysPassword=${db_pwd}
-systemPassword=${db_pwd}
-emConfiguration=NONE
-runCVUChecks=false
-dbsnmpPassword=${db_pwd}
-datafileDestination=$([ "$storage_type" == "ASM" ] && echo "+DATA" || echo "$ORACLE_DATA_DIR")
-recoveryAreaDestination=$([ "$storage_type" == "ASM" ] && echo "+FRA" || echo "$ORACLE_FRA_DIR")
-storageType=$storage_type
-characterSet=${DB_CHARACTERSET}
-nationalCharacterSet=${DB_NATIONAL_CHARACTERSET}
-registerWithDirService=false
-listeners=${LISTENER_PORT:-1521}
-sampleSchema=false
-memoryPercentage=40
-databaseType=MULTIPURPOSE
-automaticMemoryManagement=false
-totalMemory=$mem_target
-EOF
-    else
-        cat > "$rsp_file" <<EOF
-responseFileVersion=$rsp_schema
-gdbName=$ORACLE_SID
-sid=$ORACLE_SID
-databaseConfigType=$([ "$ora_type" == "rac" ] && echo "RAC" || echo "SI")
-RACOneNodeServiceName=
-policyName=Oracle
-createAsContainerDatabase=$create_as_cdb
-numberOfPDBs=$num_pdbs
-pdbName=$pdb_name
-useLocalUndoForPDBs=true
-pdbAdminPassword=${db_pwd}
-nodelist=$nodelist
-templateName=General_Purpose.dbc
-sysPassword=${db_pwd}
-systemPassword=${db_pwd}
-emConfiguration=NONE
-emExpressPort=5500
-runCVUChecks=false
-dbsnmpPassword=${db_pwd}
-dvConfiguration=false
-olsConfiguration=false
-datafileDestination=$([ "$storage_type" == "ASM" ] && echo "+DATA" || echo "$ORACLE_DATA_DIR")
-recoveryAreaDestination=$([ "$storage_type" == "ASM" ] && echo "+FRA" || echo "$ORACLE_FRA_DIR")
-storageType=$storage_type
-characterSet=${DB_CHARACTERSET}
-nationalCharacterSet=${DB_NATIONAL_CHARACTERSET}
-registerWithDirService=false
-listeners=${LISTENER_PORT:-1521}
-sampleSchema=false
-memoryPercentage=40
-databaseType=MULTIPURPOSE
-automaticMemoryManagement=false
-totalMemory=$mem_target
-EOF
-    fi
+    render_dbca_rsp "$rsp_file"
 
     chown "${db_user}:${oinstall_group}" "$rsp_file"
+    chmod 600 "$rsp_file"
     echo "$rsp_file"
 }
 
