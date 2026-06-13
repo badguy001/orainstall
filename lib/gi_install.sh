@@ -48,19 +48,19 @@ install_gi_software() {
     prereq_flags=$(get_installer_prereq_flags "$gi_version")
     log_info "Installer prereq ignore flags ($gi_version): $prereq_flags"
 
+
+    if ! run_as_grid "cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}" \
+            2>&1 | tee -a "$LOG_FILE"; then
+        die "GI software installation failed"
+    fi
+
     local ohasd_monitor=0
     if need_gi_ohasd_inittab_fix; then
         start_gi_ohasd_inittab_monitor
         ohasd_monitor=1
     fi
-
-    if ! run_as_grid "cd ${installer_dir} && ./runInstaller -silent -waitforcompletion ${prereq_flags} -responseFile ${rsp_file}" \
-            2>&1 | tee -a "$LOG_FILE"; then
-        [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
-        die "GI software installation failed"
-    fi
-
     run_gi_root_scripts
+    [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
 
     run_gi_config_tool_all_commands
 
