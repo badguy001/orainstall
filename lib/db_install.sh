@@ -316,7 +316,7 @@ create_db_user_home_symlink() {
     local link_name="$2"
     local target_dir="$3"
 
-    [[ -n "$db_home_dir" && -n "$link_name" && -d "$target_dir" ]] || return 1
+    [[ -n "$db_home_dir" && -n "$link_name" && -e "$target_dir" ]] || return 1
 
     target_dir=$(abs_path "$target_dir") || return 1
     ln -sfn "$target_dir" "${db_home_dir}/${link_name}"
