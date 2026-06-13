@@ -62,7 +62,7 @@ set_system_hostname() {
 }
 
 configure_rac_hosts() {
-    local entry hostname pub_ip vip priv_ips priv
+    local entry hostname pub_ip vip priv_ips priv local_hn
     for entry in "${ORA_NET_NODES[@]}"; do
         [[ -z "$entry" ]] && continue
         IFS=':' read -r hostname pub_ip vip priv_ips <<< "$entry"
@@ -70,6 +70,15 @@ configure_rac_hosts() {
 
         pub_ip=$(resolve_host_ip "$hostname" "${pub_ip:-}")
         [[ -n "$pub_ip" ]] || die "Cannot resolve public IP for node $hostname"
+
+        if is_local_ipv4_address "$pub_ip"; then
+            local_hn=$(get_local_hostname)
+            if [[ "$hostname" != "$local_hn" ]]; then
+                log_info "Public IP $pub_ip is on local node; setting hostname to $hostname (was $local_hn)"
+                set_system_hostname "$hostname"
+            fi
+            # set_hosts_entry "$pub_ip" "$(hostname -f 2>/dev/null || echo "$hostname")"
+        fi
 
         set_hosts_entry "$pub_ip" "$hostname"
         [[ -n "$vip" ]] && set_hosts_entry "$vip" "${hostname}-vip"
@@ -83,7 +92,6 @@ configure_rac_hosts() {
                 idx=$(( idx + 1 ))
             done
         fi
-
         log_info "RAC node: $hostname pub=$pub_ip vip=${vip:-N/A} priv=${priv_ips:-N/A}"
     done
 
@@ -152,6 +160,114 @@ build_rac_nodelist() {
     get_rac_node_hostnames
     local IFS=','
     echo "${RAC_NODE_HOSTS[*]}"
+}
+
+build_rac_gi_cluster_nodes() {
+    local entry hostname vip
+    local nodes=()
+
+    for entry in "${ORA_NET_NODES[@]}"; do
+        [[ -z "$entry" ]] && continue
+        IFS=':' read -r hostname _ vip _ <<< "$entry"
+        [[ -n "$hostname" ]] || continue
+        if [[ -n "${vip:-}" ]]; then
+            nodes+=("${hostname}:${hostname}-vip")
+        else
+            nodes+=("${hostname}:AUTO")
+        fi
+    done
+
+    [[ ${#nodes[@]} -gt 0 ]] || die "Cannot build GI clusterNodes from ora_net (RAC)"
+    local IFS=','
+    echo "${nodes[*]}"
+}
+
+get_local_rac_net_entry() {
+    local entry hostname
+
+    for entry in "${ORA_NET_NODES[@]}"; do
+        [[ -z "$entry" ]] && continue
+        IFS=':' read -r hostname _ <<< "$entry"
+        if is_local_hostname "$hostname"; then
+            echo "$entry"
+            return 0
+        fi
+    done
+
+    for entry in "${ORA_NET_NODES[@]}"; do
+        [[ -n "$entry" ]] && { echo "$entry"; return 0; }
+    done
+
+    return 1
+}
+
+ipv4_network_address() {
+    local ip="$1"
+    local prefix="$2"
+    local o1 o2 o3 o4 ip_num mask_num net_num
+
+    IFS='.' read -r o1 o2 o3 o4 <<< "$ip"
+    ip_num=$(( (o1 << 24) + (o2 << 16) + (o3 << 8) + o4 ))
+    mask_num=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    net_num=$(( ip_num & mask_num ))
+    printf "%d.%d.%d.%d\n" \
+        $(( (net_num >> 24) & 255 )) \
+        $(( (net_num >> 16) & 255 )) \
+        $(( (net_num >> 8) & 255 )) \
+        $(( net_num & 255 ))
+}
+
+find_iface_subnet_for_ip() {
+    local target_ip="$1"
+    local ifname ip_cidr ip prefix network
+
+    while read -r ifname ip_cidr; do
+        [[ -n "$ifname" && -n "$ip_cidr" ]] || continue
+        ip="${ip_cidr%%/*}"
+        prefix="${ip_cidr##*/}"
+        [[ "$ip" == "$target_ip" ]] || continue
+        [[ "$prefix" =~ ^[0-9]+$ ]] || prefix=24
+        network=$(ipv4_network_address "$ip" "$prefix")
+        echo "${ifname}:${network}"
+        return 0
+    done < <(ip -o -4 addr show 2>/dev/null | awk '{print $2, $4}')
+
+    return 1
+}
+
+is_local_ipv4_address() {
+    local target_ip="$1"
+    [[ -n "$target_ip" ]] || return 1
+    find_iface_subnet_for_ip "$target_ip" &>/dev/null
+}
+
+build_rac_network_interface_list() {
+    local entry hostname pub_ip priv_ips priv_ip ifspec ifname subnet
+    local -a iflist=()
+
+    entry=$(get_local_rac_net_entry) || die "Cannot find local RAC node in ora_net"
+
+    IFS=':' read -r hostname pub_ip _ priv_ips <<< "$entry"
+    pub_ip=$(resolve_host_ip "$hostname" "${pub_ip:-}")
+    [[ -n "$pub_ip" ]] || die "Cannot resolve public IP for RAC node $hostname"
+
+    ifspec=$(find_iface_subnet_for_ip "$pub_ip") || \
+        die "Cannot find public network interface for IP $pub_ip (node $hostname)"
+    IFS=':' read -r ifname subnet <<< "$ifspec"
+    iflist+=("${ifname}:${subnet}:1")
+
+    if [[ -n "${priv_ips:-}" ]]; then
+        priv_ip="${priv_ips%%+*}"
+        priv_ip="${priv_ip// /}"
+        [[ -n "$priv_ip" ]] || die "Invalid private IP in ora_net for node $hostname"
+        ifspec=$(find_iface_subnet_for_ip "$priv_ip") || \
+            die "Cannot find private network interface for IP $priv_ip (node $hostname)"
+        IFS=':' read -r ifname subnet <<< "$ifspec"
+        iflist+=("${ifname}:${subnet}:2")
+    fi
+
+    local IFS=','
+    echo "${iflist[*]}"
 }
 
 need_lo_mtu_16436() {

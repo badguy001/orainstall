@@ -92,6 +92,8 @@ run_gi_root_scripts() {
             ip="${RAC_PUBLIC_IPS[$i]}"
             log_info "Running GI root.sh on node $host..."
             sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${ip}" \
+                "${inv}/orainstRoot.sh" 2>&1 | tee -a "$LOG_FILE" || true
+            sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${ip}" \
                 "${gi_home}/root.sh" 2>&1 | tee -a "$LOG_FILE" || true
         done
     fi
@@ -100,7 +102,7 @@ run_gi_root_scripts() {
 run_gi_config_tool_all_commands() {
     local asm_pwd_rsp config_tool
 
-    if ! is_asm_standalone || ! is_legacy_gi_version; then
+    if ! need_gi || ! is_legacy_gi_version; then
         return 0
     fi
 
@@ -265,7 +267,7 @@ create_gi_user_home_symlink() {
 
     target_dir=$(abs_path "$target_dir") || return 1
     ln -sfn "$target_dir" "${gi_home_dir}/${link_name}"
-    # chown -h "${gi_user}:${oinstall_group}" "${gi_home_dir}/${link_name}" 2>/dev/null || true
+    chown -h "${gi_user}:${oinstall_group}" "${gi_home_dir}/${link_name}" 2>/dev/null || true
     log_info "Created symlink ~/${link_name} -> ${target_dir}"
 }
 

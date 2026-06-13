@@ -99,7 +99,7 @@ require_root() {
 backup_file() {
     local f="$1"
     if [[ -f "$f" ]]; then
-        cp -a "$f" "${f}.bak.$(date '+%Y%m%d%H%M%S')}"
+        cp -a "$f" "${f}.bak.$(date '+%Y%m%d%H%M%S')"
     fi
     return 0
 }

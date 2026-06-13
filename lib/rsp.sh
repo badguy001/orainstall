@@ -194,6 +194,7 @@ set_gi_rsp_params() {
     local asm_dg_name="${12}"
     local asm_dg_redundancy="${13}"
     local asm_dg_ausize="${14}"
+    local network_if_list="${15:-}"
 
     rsp_set_param "$dest" "oracle.install.option" "$install_option"
     rsp_set_param "$dest" "ORACLE_HOSTNAME" "$(hostname -s)"
@@ -213,6 +214,7 @@ set_gi_rsp_params() {
     rsp_set_param "$dest" "oracle.install.crs.config.gpnp.configureGNS" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.autoConfigureClusterNodeVIP" "false"
     rsp_set_param "$dest" "oracle.install.crs.config.clusterNodes" "$cluster_nodes"
+    rsp_set_param "$dest" "oracle.install.crs.config.networkInterfaceList" "$network_if_list"
     rsp_set_param "$dest" "oracle.install.crs.config.storageOption" "ASM_STORAGE"
     rsp_set_param "$dest" "oracle.install.asm.storageOption" "ASM"
     rsp_set_param "$dest" "oracle.install.asm.SYSASMPassword" "$asm_sysasm_pwd"
@@ -238,7 +240,7 @@ set_gi_rsp_params() {
 
 render_gi_install_rsp() {
     local dest="$1"
-    local template install_option cluster_nodes scan_name cluster_name_cfg
+    local template install_option cluster_nodes scan_name cluster_name_cfg network_if_list=""
     local asm_osdba asm_osoper asm_osasm asm_dg_disks=""
 
     template=$(resolve_rsp_template \
@@ -260,9 +262,12 @@ render_gi_install_rsp() {
 
     if is_rac; then
         install_option="CRS_CONFIG"
-        cluster_nodes=$(build_rac_nodelist)
+        cluster_nodes=$(build_rac_gi_cluster_nodes)
+        network_if_list=$(build_rac_network_interface_list)
         scan_name="${scan_name:-${cluster_name}-scan}"
         cluster_name_cfg="$cluster_name"
+        log_info "GI clusterNodes=$cluster_nodes"
+        log_info "GI networkInterfaceList=$network_if_list"
     fi
 
     log_info "GI response template ($gi_version): $template -> $dest"
@@ -270,7 +275,8 @@ render_gi_install_rsp() {
 
     set_gi_rsp_params "$dest" "$install_option" "$cluster_nodes" "$scan_name" \
         "$cluster_name_cfg" "$asm_osdba" "$asm_osoper" "$asm_osasm" "$asm_dg_disks" "$asm_disk_string" \
-        "$asm_passwd" "$asm_diskgroup_name" "$asm_diskgroup_redundancy" "$ASM_DISKGROUP_AUSIZE_MB"
+        "$asm_passwd" "$asm_diskgroup_name" "$asm_diskgroup_redundancy" "$ASM_DISKGROUP_AUSIZE_MB" \
+        "$network_if_list"
 }
 
 get_dbca_rsp_template() {
