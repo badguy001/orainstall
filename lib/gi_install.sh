@@ -124,6 +124,68 @@ run_gi_config_tool_all_commands() {
         export ORACLE_HOME=${gi_home}
         \${ORACLE_HOME}/cfgtoollogs/configToolAllCommands RESPONSE_FILE=${asm_pwd_rsp}
     " 2>&1 | tee -a "$LOG_FILE" || die "configToolAllCommands failed (11g ASM standalone)"
+
+    relocate_asm_spfile_to_filesystem
+}
+
+relocate_asm_spfile_to_filesystem() {
+    if ! is_asm_standalone || ! is_legacy_gi_version; then
+        return 0
+    fi
+
+    [[ -x "${gi_home}/bin/srvctl" ]] || {
+        log_warn "srvctl not found; skipping ASM spfile relocation"
+        return 0
+    }
+
+    local srvctl_out spfile_path local_spfile="${gi_home}/dbs/spfile+ASM.ora"
+
+    if ! srvctl_out=$(run_as_grid "
+        export ORACLE_HOME=${gi_home}
+        export PATH=\$ORACLE_HOME/bin:\$PATH
+        \$ORACLE_HOME/bin/srvctl config asm
+    " 2>/dev/null); then
+        log_warn "Failed to query srvctl config asm; skipping ASM spfile relocation"
+        return 0
+    fi
+
+    spfile_path=$(printf '%s\n' "$srvctl_out" | awk -F: '
+        /^[Ss][Pp]file[[:space:]]*:/ {
+            sub(/^[^:]*:[[:space:]]*/, "")
+            gsub(/^[ \t]+|[ \t]+$/, "")
+            print
+            exit
+        }
+    ')
+
+    [[ -n "$spfile_path" ]] || {
+        log_warn "ASM spfile not found in srvctl config asm output; skipping relocation"
+        return 0
+    }
+
+    if [[ "$spfile_path" != +* ]]; then
+        log_info "ASM spfile already on filesystem: $spfile_path"
+        return 0
+    fi
+
+    log_info "ASM spfile on disk group: $spfile_path; copying to $local_spfile"
+
+    mkdir -p "${gi_home}/dbs"
+    chown "${gi_user}:${oinstall_group}" "${gi_home}/dbs" 2>/dev/null || true
+
+    run_as_grid "
+        set -e
+        export ORACLE_HOME=${gi_home}
+        export PATH=\$ORACLE_HOME/bin:\$PATH
+        export ORACLE_SID='+ASM'
+        mkdir -p ${gi_home}/dbs
+        [[ -x \$ORACLE_HOME/bin/asmcmd ]] || exit 1
+        \$ORACLE_HOME/bin/asmcmd spcopy -u '${spfile_path}' '${local_spfile}'
+        \$ORACLE_HOME/bin/srvctl stop asm -f
+        \$ORACLE_HOME/bin/srvctl start asm
+    " 2>&1 | tee -a "$LOG_FILE" || die "Failed to relocate ASM spfile to ${local_spfile}"
+
+    log_info "ASM spfile relocated to filesystem: ${local_spfile}"
 }
 
 generate_asm_password_rsp() {
