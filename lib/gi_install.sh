@@ -65,7 +65,7 @@ install_gi_software() {
 
     run_gi_config_tool_all_commands
 
-    [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
+    configure_gi_user_post_install
 
     cleanup_staging_dir "${GI_MEDIA_STAGING_DIR:-}"
 
@@ -181,6 +181,7 @@ relocate_asm_spfile_to_filesystem() {
         mkdir -p ${gi_home}/dbs
         [[ -x \$ORACLE_HOME/bin/asmcmd ]] || exit 1
         \$ORACLE_HOME/bin/asmcmd spcopy -u '${spfile_path}' '${local_spfile}'
+        \$ORACLE_HOME/bin/srvctl config asm -p '${local_spfile}'
         \$ORACLE_HOME/bin/srvctl stop asm -f
         \$ORACLE_HOME/bin/srvctl start asm
     " 2>&1 | tee -a "$LOG_FILE" || die "Failed to relocate ASM spfile to ${local_spfile}"
@@ -200,4 +201,101 @@ EOF
     chown "${gi_user}:${oinstall_group}" "$rsp_file"
     chmod 600 "$rsp_file"
     echo "$rsp_file"
+}
+
+get_local_asm_sid_from_oratab() {
+    local line sid home
+
+    [[ -f /etc/oratab ]] || return 1
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// /}" ]] && continue
+        sid="${line%%:*}"
+        home="${line#*:}"
+        home="${home%%:*}"
+        [[ "$sid" == +* ]] || continue
+        if [[ -n "${gi_home:-}" && "$home" != "$gi_home" ]]; then
+            continue
+        fi
+        echo "$sid"
+        return 0
+    done < /etc/oratab
+
+    return 1
+}
+
+resolve_crs_alert_trace_dir() {
+    local hostname="$1"
+    local d
+
+    if is_legacy_gi_version; then
+        d="${gi_home}/log/${hostname}"
+        [[ -d "$d" ]] && { echo "$d"; return 0; }
+    fi
+
+    d="${gi_base}/diag/crs/${hostname}/crs/trace"
+    [[ -d "$d" ]] && { echo "$d"; return 0; }
+
+    d="${gi_home}/log/${hostname}"
+    [[ -d "$d" ]] && { echo "$d"; return 0; }
+
+    return 1
+}
+
+resolve_asm_alert_trace_dir() {
+    local asm_sid="$1"
+    local d
+
+    for d in \
+        "${gi_base}/diag/asm/+asm/${asm_sid}/trace" \
+        "${gi_base}/diag/asm/+ASM/${asm_sid}/trace"; do
+        [[ -d "$d" ]] && { echo "$d"; return 0; }
+    done
+
+    return 1
+}
+
+create_gi_user_home_symlink() {
+    local gi_home_dir="$1"
+    local link_name="$2"
+    local target_dir="$3"
+
+    [[ -n "$gi_home_dir" && -n "$link_name" && -d "$target_dir" ]] || return 1
+
+    target_dir=$(abs_path "$target_dir") || return 1
+    ln -sfn "$target_dir" "${gi_home_dir}/${link_name}"
+    chown -h "${gi_user}:${oinstall_group}" "${gi_home_dir}/${link_name}" 2>/dev/null || true
+    log_info "Created symlink ~/${link_name} -> ${target_dir}"
+}
+
+configure_gi_user_post_install() {
+    local gi_home_dir asm_sid hostname crs_trace_dir asm_trace_dir
+
+    gi_home_dir=$(getent passwd "$gi_user" 2>/dev/null | cut -d: -f6)
+    [[ -n "$gi_home_dir" ]] || gi_home_dir="/home/$gi_user"
+
+    if ! asm_sid=$(get_local_asm_sid_from_oratab); then
+        log_warn "Local ASM instance SID not found in /etc/oratab; skipping GI user ASM configuration"
+        return 0
+    fi
+
+    export GI_ASM_SID="$asm_sid"
+    log_info "Configuring ${gi_user} post-install (ASM SID=${GI_ASM_SID})"
+
+    write_gi_user_profile
+
+    hostname=$(get_local_hostname)
+
+    if crs_trace_dir=$(resolve_crs_alert_trace_dir "$hostname"); then
+        create_gi_user_home_symlink "$gi_home_dir" "crs_trace" "$crs_trace_dir"
+    else
+        log_warn "CRS alert trace directory not found for hostname=${hostname}"
+    fi
+
+    if asm_trace_dir=$(resolve_asm_alert_trace_dir "$asm_sid"); then
+        create_gi_user_home_symlink "$gi_home_dir" "${asm_sid}_trace" "$asm_trace_dir"
+    else
+        log_warn "ASM alert trace directory not found for ASM SID=${asm_sid}"
+    fi
 }

@@ -132,6 +132,8 @@ create_database() {
         " 2>&1 | tee -a "$LOG_FILE" || die "DBCA database creation failed"
     fi
 
+    configure_db_user_post_dbca
+
     log_info "Database $ORACLE_SID created successfully"
 }
 
@@ -263,4 +265,85 @@ EOF
 ================================================================================
 
 EOF
+}
+
+get_local_db_sid_from_oratab() {
+    local line sid home
+
+    [[ -f /etc/oratab ]] || return 1
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// /}" ]] && continue
+        sid="${line%%:*}"
+        home="${line#*:}"
+        home="${home%%:*}"
+        [[ "$sid" == +* ]] && continue
+        if [[ -n "${db_home:-}" && "$home" != "$db_home" ]]; then
+            continue
+        fi
+        echo "$sid"
+        return 0
+    done < /etc/oratab
+
+    return 1
+}
+
+resolve_db_alert_trace_dir() {
+    local db_sid="$1"
+    local d parent db_unique
+
+    if [[ -d "${db_base}/diag/rdbms" ]]; then
+        for parent in "${db_base}/diag/rdbms"/*; do
+            [[ -d "$parent" ]] || continue
+            d="${parent}/${db_sid}/trace"
+            [[ -d "$d" ]] && { echo "$d"; return 0; }
+        done
+    fi
+
+    d="${db_base}/diag/rdbms/${db_sid}/${db_sid}/trace"
+    [[ -d "$d" ]] && { echo "$d"; return 0; }
+
+    db_unique=$(echo "$db_sid" | tr '[:upper:]' '[:lower:]')
+    d="${db_base}/diag/rdbms/${db_unique}/${db_sid}/trace"
+    [[ -d "$d" ]] && { echo "$d"; return 0; }
+
+    return 1
+}
+
+create_db_user_home_symlink() {
+    local db_home_dir="$1"
+    local link_name="$2"
+    local target_dir="$3"
+
+    [[ -n "$db_home_dir" && -n "$link_name" && -d "$target_dir" ]] || return 1
+
+    target_dir=$(abs_path "$target_dir") || return 1
+    ln -sfn "$target_dir" "${db_home_dir}/${link_name}"
+    chown -h "${db_user}:${oinstall_group}" "${db_home_dir}/${link_name}" 2>/dev/null || true
+    log_info "Created symlink ~/${link_name} -> ${target_dir}"
+}
+
+configure_db_user_post_dbca() {
+    local db_home_dir db_sid db_trace_dir
+
+    db_home_dir=$(getent passwd "$db_user" 2>/dev/null | cut -d: -f6)
+    [[ -n "$db_home_dir" ]] || db_home_dir="/home/$db_user"
+
+    db_sid=""
+    if ! db_sid=$(get_local_db_sid_from_oratab); then
+        db_sid="${ORACLE_SID:-}"
+    fi
+    if [[ -z "$db_sid" ]]; then
+        log_warn "Database instance SID not found; skipping db user alert log symlink"
+        return 0
+    fi
+
+    log_info "Configuring ${db_user} post-DBCA (DB SID=${db_sid})"
+
+    if db_trace_dir=$(resolve_db_alert_trace_dir "$db_sid"); then
+        create_db_user_home_symlink "$db_home_dir" "${db_sid}_trace" "$db_trace_dir"
+    else
+        log_warn "Database alert trace directory not found for DB SID=${db_sid}"
+    fi
 }

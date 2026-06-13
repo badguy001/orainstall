@@ -260,9 +260,14 @@ EOF
 
 write_gi_user_profile() {
     local gi_profile="/home/$gi_user/.bash_profile"
-    local gi_home_dir
+    local gi_home_dir asm_sid
     gi_home_dir=$(getent passwd "$gi_user" 2>/dev/null | cut -d: -f6)
     [[ -n "$gi_home_dir" ]] && gi_profile="${gi_home_dir}/.bash_profile"
+
+    asm_sid="${GI_ASM_SID:-}"
+    if [[ -z "$asm_sid" ]] && declare -F get_local_asm_sid_from_oratab &>/dev/null; then
+        asm_sid=$(get_local_asm_sid_from_oratab) || true
+    fi
 
     write_profile_block "$gi_profile" \
         "# >>> orainstall gi environment >>>" \
@@ -271,6 +276,7 @@ write_gi_user_profile() {
 # Oracle GI Environment - orainstall
 export ORACLE_BASE=$gi_base
 export ORACLE_HOME=$gi_home
+$( [[ -n "$asm_sid" ]] && echo "export ORACLE_SID=${asm_sid}" )
 export PATH=\$ORACLE_HOME/bin:\$PATH
 export LD_LIBRARY_PATH=\$ORACLE_HOME/lib:/lib:/usr/lib
 EOF
