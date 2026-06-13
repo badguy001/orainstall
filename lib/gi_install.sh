@@ -7,6 +7,7 @@ prepare_gi_media() {
     fi
 
     ensure_unzip_dir "/opt/oracle_staging/gi" "$gi_user"
+    GI_MEDIA_STAGING_DIR="$UNZIP_STAGING_DIR"
     unzip_media_files "$UNZIP_STAGING_DIR" "$gi_user" "${GI_INSTALL_FILES[@]}"
     GI_INSTALL_DIR="$INSTALL_MEDIA_DIR"
     export GI_INSTALL_DIR
@@ -65,6 +66,8 @@ install_gi_software() {
     run_gi_config_tool_all_commands
 
     [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
+
+    cleanup_staging_dir "${GI_MEDIA_STAGING_DIR:-}"
 
     log_info "Grid Infrastructure installation complete"
 }

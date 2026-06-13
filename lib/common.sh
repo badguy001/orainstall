@@ -434,3 +434,34 @@ unzip_media_files() {
         fi
     fi
 }
+
+is_oracle_home_path() {
+    local path="$1"
+    local path_real db_real gi_real
+
+    [[ -n "$path" ]] || return 1
+    path_real=$(abs_path "$path" 2>/dev/null) || path_real="$path"
+    db_real=$(abs_path "${db_home:-}" 2>/dev/null) || db_real=""
+    gi_real=$(abs_path "${gi_home:-}" 2>/dev/null) || gi_real=""
+
+    if [[ -n "$db_real" && ( "$path_real" == "$db_real" || "$path_real" == "$db_real"/* ) ]]; then
+        return 0
+    fi
+    if [[ -n "$gi_real" && ( "$path_real" == "$gi_real" || "$path_real" == "$gi_real"/* ) ]]; then
+        return 0
+    fi
+    return 1
+}
+
+cleanup_staging_dir() {
+    local dir="$1"
+
+    [[ -n "$dir" && -d "$dir" ]] || return 0
+    if is_oracle_home_path "$dir"; then
+        log_info "Skip cleanup (extracted under Oracle home): $dir"
+        return 0
+    fi
+
+    log_info "Removing extracted staging directory: $dir"
+    rm -rf "$dir"
+}

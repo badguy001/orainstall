@@ -3,6 +3,7 @@
 
 prepare_db_media() {
     ensure_unzip_dir "/opt/oracle_staging/db" "$db_user"
+    DB_MEDIA_STAGING_DIR="$UNZIP_STAGING_DIR"
     unzip_media_files "$UNZIP_STAGING_DIR" "$db_user" "${DB_INSTALL_FILES[@]}"
     DB_INSTALL_DIR="$INSTALL_MEDIA_DIR"
     export DB_INSTALL_DIR
@@ -75,6 +76,7 @@ install_db_software() {
     [[ $install_rc -eq 0 ]] || die "DB software installation failed"
 
     run_db_root_scripts
+    cleanup_staging_dir "${DB_MEDIA_STAGING_DIR:-}"
     log_info "Oracle Database software installation complete"
 }
 

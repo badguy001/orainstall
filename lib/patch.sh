@@ -110,6 +110,7 @@ upgrade_opatch_gi() {
     # chmod +x "${gi_home}/OPatch/opatch" 2>/dev/null || true
 
     verify_opatch "$gi_home" "$gi_user"
+    cleanup_staging_dir "$staging"
 }
 
 upgrade_opatch() {
@@ -209,6 +210,8 @@ apply_patches() {
                 log_warn "Unknown patch target: $target (gi|db|gidb); skipping $patch_file"
                 ;;
         esac
+
+        cleanup_staging_dir "$staging"
     done
 
     log_info "Patch application complete"
