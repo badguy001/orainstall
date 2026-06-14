@@ -97,7 +97,8 @@ install_manual_packages() {
                     ksh libaio libaio.i686 libaio-devel libaio-devel.i686
                     libgcc libgcc.i686 libstdc++ libstdc++.i686 libstdc++-devel libstdc++-devel.i686
                     libXext libXtst libX11 libXau libXi libXrender libXrender-devel
-                    make sysstat unixODBC unixODBC-devel device-mapper-multipath psmisc elfutils-libelf-devel
+                    make sysstat unixODBC unixODBC-devel device-mapper-multipath psmisc 
+                    elfutils-libelf elfutils-libelf-devel
                 )
                 ;;
             7)
@@ -107,7 +108,8 @@ install_manual_packages() {
                     libX11 libXau libXi libXtst libXrender libXrender-devel
                     libgcc libstdc++ libstdc++-devel libxcb libibverbs
                     make sysstat smartmontools net-tools nfs-utils unzip
-                    policycoreutils-python device-mapper-multipath psmisc elfutils-libelf-devel
+                    policycoreutils-python device-mapper-multipath psmisc 
+                    elfutils-libelf elfutils-libelf-devel
                 )
                 ;;
             8|9)
@@ -116,7 +118,9 @@ install_manual_packages() {
                     libX11 libXau libXi libXtst libXrender libXrender-devel
                     libgcc libstdc++ libstdc++-devel libxcb libnsl
                     make sysstat smartmontools net-tools nfs-utils unzip
-                    policycoreutils-python-utils device-mapper-multipath psmisc elfutils-libelf-devel
+                    policycoreutils-python-utils device-mapper-multipath psmisc 
+                    elfutils-libelf elfutils-libelf-devel compat-openssl10
+                    libibverbs elfutils elfutils-devel
                 )
                 ;;
         esac
@@ -148,16 +152,16 @@ install_extra_packages() {
     fi
 
     # cvuqdisk
-    if [[ ! -x /usr/sbin/cvuqdisk ]]; then
-        local cvu_rpm search_dir
-        for search_dir in "${GI_INSTALL_DIR:-}" "${DB_INSTALL_DIR:-}" /opt/software; do
-            [[ -n "$search_dir" && -d "$search_dir" ]] || continue
-            cvu_rpm=$(find "$search_dir" -name "cvuqdisk-*.rpm" 2>/dev/null | head -1)
-            [[ -n "$cvu_rpm" ]] && break
-        done
-        if [[ -n "${cvu_rpm:-}" ]]; then
-            log_info "Installing cvuqdisk: $cvu_rpm"
-            rpm -Uvh "$cvu_rpm" 2>/dev/null || true
-        fi
-    fi
+    #if [[ ! -x /usr/sbin/cvuqdisk ]]; then
+    #    local cvu_rpm search_dir
+    #    for search_dir in "${GI_INSTALL_DIR:-}" "${DB_INSTALL_DIR:-}" /opt/software; do
+    #        [[ -n "$search_dir" && -d "$search_dir" ]] || continue
+    #        cvu_rpm=$(find "$search_dir" -name "cvuqdisk-*.rpm" 2>/dev/null | head -1)
+    #        [[ -n "$cvu_rpm" ]] && break
+    #    done
+    #    if [[ -n "${cvu_rpm:-}" ]]; then
+    #        log_info "Installing cvuqdisk: $cvu_rpm"
+    #        rpm -Uvh "$cvu_rpm" 2>/dev/null || true
+    #    fi
+    #fi
 }

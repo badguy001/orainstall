@@ -113,7 +113,8 @@ memory_for_oracle=""
 # NTP servers (comma-separated); configures slew-mode time synchronization
 ntp_servers=""
 
-# OS install ISO, mounted as yum/dnf source
+# OS install ISO, mounted as yum/dnf source (RHEL 8+ ISO: auto-configures BaseOS + AppStream)
+# os_iso_file="/path/to/rhel-8.2-x86_64-dvd1.iso"
 os_iso_file=""
 
 # ==================== Database parameters (run_mode=full) ====================

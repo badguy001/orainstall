@@ -83,6 +83,7 @@ EOF
 
 configure_environment() {
     if [[ $SKIP_PREREQS -eq 0 ]]; then
+        get_pkg_manager
         setup_yum_from_iso
         install_prerequisites
         create_oracle_users

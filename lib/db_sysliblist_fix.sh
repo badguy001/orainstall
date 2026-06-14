@@ -27,12 +27,12 @@ apply_sysliblist_fix() {
 
     [[ -f "$file" ]] || return 1
 
-    if grep -qF "${new_libs}" "$file" 2>/dev/null; then
+    if grep -qF -- "${new_libs}" "$file" 2>/dev/null; then
         SYSLIBLIST_FIX_APPLIED=1
         return 0
     fi
 
-    if ! grep -qF "$old_libs" "$file" 2>/dev/null; then
+    if ! grep -qF -- "$old_libs" "$file" 2>/dev/null; then
         return 1
     fi
 
