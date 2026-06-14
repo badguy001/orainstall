@@ -51,10 +51,10 @@ configure_standalone_hosts() {
 
 set_system_hostname() {
     local name="$1"
+    hostname "$name"   # set current shell hostname
     if command -v hostnamectl &>/dev/null; then
         hostnamectl set-hostname "$name"
     else
-        hostname "$name"
         if [[ -f /etc/sysconfig/network ]]; then
             sed -i "s/^HOSTNAME=.*/HOSTNAME=$name/" /etc/sysconfig/network
         fi

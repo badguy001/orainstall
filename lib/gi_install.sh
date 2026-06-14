@@ -125,7 +125,7 @@ run_gi_config_tool_all_commands() {
     run_as_grid "
         export ORACLE_HOME=${gi_home}
         \${ORACLE_HOME}/cfgtoollogs/configToolAllCommands RESPONSE_FILE=${asm_pwd_rsp}
-    " 2>&1 | tee -a "$LOG_FILE" || die "configToolAllCommands failed (11g ASM standalone)"
+    " 2>&1 | tee -a "$LOG_FILE" || log_error "configToolAllCommands failed (11g ASM standalone)"
 
     relocate_asm_spfile_to_filesystem
 }

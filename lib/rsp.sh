@@ -364,7 +364,7 @@ set_dbca_rsp_params() {
     fi
 
     if is_legacy_dbca_rsp_format; then
-        rsp_set_dbca_ini_param "$dest" "GDBNAME" "$ORACLE_SID"
+        rsp_set_dbca_ini_param "$dest" "GDBNAME" "$DBNAME"
         rsp_set_dbca_ini_param "$dest" "SID" "$ORACLE_SID"
         rsp_set_dbca_ini_param "$dest" "TEMPLATENAME" "General_Purpose.dbc"
         rsp_set_dbca_ini_param "$dest" "SYSPASSWORD" "$db_pwd"

@@ -117,6 +117,7 @@ ntp_servers=""
 os_iso_file=""
 
 # ==================== Database parameters (run_mode=full) ====================
+DBNAME="orcl"
 ORACLE_SID="orcl"
 ORACLE_DATA_DIR="/u01/oradata"
 ORACLE_FRA_DIR="/u01/fast_recovery_area"

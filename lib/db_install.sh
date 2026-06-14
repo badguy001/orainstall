@@ -267,46 +267,30 @@ EOF
 EOF
 }
 
-get_local_db_sid_from_oratab() {
-    local line sid home
-
-    [[ -f /etc/oratab ]] || return 1
-
-    while IFS= read -r line; do
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${line// /}" ]] && continue
-        sid="${line%%:*}"
-        home="${line#*:}"
-        home="${home%%:*}"
-        [[ "$sid" == +* ]] && continue
-        if [[ -n "${db_home:-}" && "$home" != "$db_home" ]]; then
-            continue
-        fi
-        echo "$sid"
-        return 0
-    done < /etc/oratab
-
-    return 1
-}
-
 resolve_db_alert_trace_dir() {
-    local db_sid="$1"
-    local d parent db_unique
+    local dbname="${1:-${DBNAME:-}}"
+    local instance_sid="${2:-${ORACLE_SID:-}}"
+    local d parent dbname_var inst
 
-    if [[ -d "${db_base}/diag/rdbms" ]]; then
-        for parent in "${db_base}/diag/rdbms"/*; do
-            [[ -d "$parent" ]] || continue
-            d="${parent}/${db_sid}/trace"
+    [[ -n "$dbname" && -n "$instance_sid" ]] || return 1
+
+    for dbname_var in "$dbname" "$(echo "$dbname" | tr '[:upper:]' '[:lower:]')"; do
+        d="${db_base}/diag/rdbms/${dbname_var}/${instance_sid}/trace"
+        [[ -d "$d" ]] && { echo "$d"; return 0; }
+
+        parent="${db_base}/diag/rdbms/${dbname_var}"
+        [[ -d "$parent" ]] || continue
+
+        for d in "${parent}/${instance_sid}"*/trace; do
             [[ -d "$d" ]] && { echo "$d"; return 0; }
         done
-    fi
 
-    d="${db_base}/diag/rdbms/${db_sid}/${db_sid}/trace"
-    [[ -d "$d" ]] && { echo "$d"; return 0; }
-
-    db_unique=$(echo "$db_sid" | tr '[:upper:]' '[:lower:]')
-    d="${db_base}/diag/rdbms/${db_unique}/${db_sid}/trace"
-    [[ -d "$d" ]] && { echo "$d"; return 0; }
+        for d in "${parent}"/*/trace; do
+            [[ -d "$d" ]] || continue
+            inst=$(basename "$(dirname "$d")")
+            [[ "$inst" == "$instance_sid" ]] && { echo "$d"; return 0; }
+        done
+    done
 
     return 1
 }
@@ -316,7 +300,7 @@ create_db_user_home_symlink() {
     local link_name="$2"
     local target_dir="$3"
 
-    [[ -n "$db_home_dir" && -n "$link_name" && -e "$target_dir" ]] || return 1
+    [[ -n "$db_home_dir" && -n "$link_name" && -d "$target_dir" ]] || return 1
 
     target_dir=$(abs_path "$target_dir") || return 1
     ln -sfn "$target_dir" "${db_home_dir}/${link_name}"
@@ -325,26 +309,23 @@ create_db_user_home_symlink() {
 }
 
 configure_db_user_post_dbca() {
-    local db_home_dir db_sid db_trace_dir
+    local db_home_dir db_trace_dir instance_sid
 
     db_home_dir=$(getent passwd "$db_user" 2>/dev/null | cut -d: -f6)
     [[ -n "$db_home_dir" ]] || db_home_dir="/home/$db_user"
 
-    db_sid=""
-    if ! db_sid=$(get_local_db_sid_from_oratab); then
-        db_sid="${ORACLE_SID:-}"
-    fi
-    if [[ -z "$db_sid" ]]; then
-        log_warn "Database instance SID not found; skipping db user alert log symlink"
+    if [[ -z "${DBNAME:-}" || -z "${ORACLE_SID:-}" ]]; then
+        log_warn "DBNAME or ORACLE_SID not configured; skipping db user alert log symlink"
         return 0
     fi
 
-    log_info "Configuring ${db_user} post-DBCA (DB SID=${db_sid})"
+    log_info "Configuring ${db_user} post-DBCA (DBNAME=${DBNAME}, instance SID=${ORACLE_SID})"
 
-    if db_trace_dir=$(resolve_db_alert_trace_dir "$db_sid"); then
-        create_db_user_home_symlink "$db_home_dir" "${db_sid}_trace" "$db_trace_dir"
-        create_db_user_home_symlink "$db_home_dir" `basename "$db_trace_dir"/alert*.log` "$db_trace_dir"/alert*.log
+    if db_trace_dir=$(resolve_db_alert_trace_dir "$DBNAME" "$ORACLE_SID"); then
+        instance_sid=$(basename "$(dirname "$db_trace_dir")")
+        create_db_user_home_symlink "$db_home_dir" "${instance_sid}_trace" "$db_trace_dir"
+        create_db_user_home_symlink "$db_home_dir" `basename "${instance_sid}"/alert*log` "$db_trace_dir"/alert*log
     else
-        log_warn "Database alert trace directory not found for DB SID=${db_sid}"
+        log_warn "Database alert trace directory not found under ${db_base}/diag/rdbms/${DBNAME}/${ORACLE_SID}*/trace"
     fi
 }

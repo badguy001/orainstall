@@ -175,6 +175,7 @@ load_and_validate_config() {
     GI_BASE="$gi_base"
 
     ORACLE_SID="${ORACLE_SID:-orcl}"
+    DBNAME="${DBNAME:-$ORACLE_SID}"
     ORACLE_DATA_DIR="${ORACLE_DATA_DIR:-/u01/oradata}"
     ORACLE_FRA_DIR="${ORACLE_FRA_DIR:-/u01/fast_recovery_area}"
     DB_CHARACTERSET="${DB_CHARACTERSET:-AL32UTF8}"
@@ -239,6 +240,7 @@ load_and_validate_config() {
     export scan_name scanip
     export asm_disk_string ignore_disk_wwid disks_use_by_asm asm_diskgroup_name
     export asm_diskgroup_disks asm_diskgroup_redundancy asm_diskgroup_ausize asm_passwd
+    export DBNAME ORACLE_SID
 }
 
 parse_ora_net() {
