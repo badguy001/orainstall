@@ -58,9 +58,14 @@ install_db_software() {
     fi
 
     local emagent_monitor=0
+    local sysliblist_monitor=0
     if need_11g_emagent_fix; then
         start_emagent_mk_monitor
         emagent_monitor=1
+    fi
+    if need_11g_sysliblist_fix; then
+        start_sysliblist_monitor
+        sysliblist_monitor=1
     fi
 
     if run_as_oracle "$install_cmd" 2>&1 | tee -a "$LOG_FILE"; then
@@ -71,6 +76,9 @@ install_db_software() {
 
     if [[ $emagent_monitor -eq 1 ]]; then
         stop_emagent_mk_monitor
+    fi
+    if [[ $sysliblist_monitor -eq 1 ]]; then
+        stop_sysliblist_monitor
     fi
 
     [[ $install_rc -eq 0 ]] || die "DB software installation failed"

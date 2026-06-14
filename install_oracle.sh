@@ -42,6 +42,8 @@ source "$SCRIPT_DIR/lib/ssh_setup.sh"
 source "$SCRIPT_DIR/lib/rsp.sh"
 # shellcheck source=lib/emagent_fix.sh
 source "$SCRIPT_DIR/lib/emagent_fix.sh"
+# shellcheck source=lib/db_sysliblist_fix.sh
+source "$SCRIPT_DIR/lib/db_sysliblist_fix.sh"
 # shellcheck source=lib/gi_ohasd_fix.sh
 source "$SCRIPT_DIR/lib/gi_ohasd_fix.sh"
 # shellcheck source=lib/gi_install.sh
