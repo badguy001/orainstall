@@ -308,7 +308,7 @@ create_db_user_home_symlink() {
     local link_name="$2"
     local target_dir="$3"
 
-    [[ -n "$db_home_dir" && -n "$link_name" && -d "$target_dir" ]] || return 1
+    [[ -n "$db_home_dir" && -n "$link_name" && -e "$target_dir" ]] || return 1
 
     target_dir=$(abs_path "$target_dir") || return 1
     ln -sfn "$target_dir" "${db_home_dir}/${link_name}"
@@ -332,6 +332,7 @@ configure_db_user_post_dbca() {
     if db_trace_dir=$(resolve_db_alert_trace_dir "$DBNAME" "$ORACLE_SID"); then
         instance_sid=$(basename "$(dirname "$db_trace_dir")")
         create_db_user_home_symlink "$db_home_dir" "${instance_sid}_trace" "$db_trace_dir"
+        # link instance alert log to db user home
         create_db_user_home_symlink "$db_home_dir" `basename "${instance_sid}"/alert*log` "$db_trace_dir"/alert*log
     else
         log_warn "Database alert trace directory not found under ${db_base}/diag/rdbms/${DBNAME}/${ORACLE_SID}*/trace"
