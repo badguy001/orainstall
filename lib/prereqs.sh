@@ -37,6 +37,7 @@ install_prerequisites() {
         install_manual_packages
     fi
     install_extra_packages
+    fix_11g_libnsl_symlink
 }
 
 install_base_packages() {
@@ -164,4 +165,54 @@ install_extra_packages() {
     #        rpm -Uvh "$cvu_rpm" 2>/dev/null || true
     #    fi
     #fi
+}
+
+need_11g_libnsl_symlink_fix() {
+    [[ "$db_version" == "11gR2" ]] || return 1
+    [[ "$OS_FAMILY" == "redhat" ]] || return 1
+    [[ "$OS_MAJOR" -ge 8 ]]
+}
+
+libnsl_so_exists() {
+    local p
+    for p in /usr/lib64/libnsl.so /usr/lib/libnsl.so; do
+        [[ -e "$p" ]] && return 0
+    done
+    return 1
+}
+
+fix_11g_libnsl_symlink() {
+    local target link_dir link_name
+
+    need_11g_libnsl_symlink_fix || return 0
+
+    if libnsl_so_exists; then
+        log_info "libnsl.so already present; skipping 11gR2 libnsl symlink fix"
+        return 0
+    fi
+
+    target=$(rpm -ql libnsl 2>/dev/null | grep -E '/libnsl\.so' | sort | head -1)
+    #if [[ -z "$target" || ! -f "$target" ]]; then
+    #    target=$(find /usr/lib64 /usr/lib -maxdepth 1 -name 'libnsl.so*' -type f 2>/dev/null | sort | head -1)
+    #fi
+
+    if [[ -z "$target" || ! -f "$target" ]]; then
+        log_warn "libnsl.so* not found after package install; cannot create libnsl.so symlink for 11gR2"
+        return 1
+    fi
+
+    link_dir=$(dirname "$target")
+    link_name="${link_dir}/libnsl.so"
+
+    if [[ -e "$link_name" ]]; then
+        log_info "libnsl.so already exists: $link_name"
+        return 0
+    fi
+
+    ln -sfn "$(basename "$target")" "$link_name"
+    log_info "Created libnsl.so symlink for 11gR2: ${link_name} -> $(basename "$target")"
+
+    if command -v ldconfig &>/dev/null; then
+        ldconfig 2>/dev/null || true
+    fi
 }
