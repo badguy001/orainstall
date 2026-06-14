@@ -174,8 +174,8 @@ load_and_validate_config() {
     GI_HOME="$gi_home"
     GI_BASE="$gi_base"
 
-    ORACLE_SID="${ORACLE_SID:-orcl}"
-    DBNAME="${DBNAME:-$ORACLE_SID}"
+    DBNAME="${DBNAME}"
+    ORACLE_SID="${ORACLE_SID:-${DBNAME}}"
     ORACLE_DATA_DIR="${ORACLE_DATA_DIR:-/u01/oradata}"
     ORACLE_FRA_DIR="${ORACLE_FRA_DIR:-/u01/fast_recovery_area}"
     DB_CHARACTERSET="${DB_CHARACTERSET:-AL32UTF8}"
