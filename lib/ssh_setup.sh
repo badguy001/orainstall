@@ -266,7 +266,7 @@ setup_user_ssh_trust() {
     chown_user_path "$user" "$ssh_dir"
 
     if [[ ! -f "${ssh_dir}/id_rsa" ]]; then
-        ssh-keygen -t rsa -N "" -f "${ssh_dir}/id_rsa" -q
+        ssh-keygen -t rsa -b 4096 -N "" -f "${ssh_dir}/id_rsa" -q
     fi
     chmod 600 "${ssh_dir}/id_rsa"
     chown_user_path "$user" "${ssh_dir}/id_rsa"
