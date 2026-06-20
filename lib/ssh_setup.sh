@@ -320,7 +320,7 @@ verify_rac_passwordless_ssh() {
             if su - "$user" -c "ssh -o BatchMode=yes -o ConnectTimeout=10 '${host}' hostname" >/dev/null 2>&1; then
                 log_info "Passwordless SSH OK: ${user}@${host}"
             else
-                log_warn "Passwordless SSH check failed: ${user}@${host} (GI install may fail)"
+                die "Passwordless SSH check failed: ${user}@${host} (GI install may fail)"
                 failed=1
             fi
         done
