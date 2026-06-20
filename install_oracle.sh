@@ -173,10 +173,6 @@ main() {
 
     configure_environment
 
-    if is_rac && [[ $NODE_ENV_ONLY -eq 0 ]]; then
-        setup_ssh_trust
-    fi
-    
     if [[ $NODE_ENV_ONLY -eq 1 ]]; then
         log_info "Node environment configuration complete (node-env-only)"
         exit 0
@@ -184,6 +180,7 @@ main() {
 
     if is_rac; then
         dispatch_env_to_rac_nodes
+        setup_ssh_trust
     fi
 
     if [[ "$run_mode" == "$RUN_MODE_ENV" ]]; then

@@ -324,7 +324,7 @@ disable_selinux() {
 
 disable_firewall() {
     log_info "Disabling and stopping firewall..."
-    if is_systemd && systemctl list-unit-files 2>/dev/null | grep -q firewalld; then
+    if is_systemd && systemctl list-unit-files 2>/dev/null | grep firewalld 1>/dev/null; then
         systemctl stop firewalld 2>/dev/null || true
         systemctl disable firewalld 2>/dev/null || true
     elif [[ -x /sbin/chkconfig ]]; then
@@ -388,7 +388,7 @@ configure_logind_remove_ipc() {
 
     log_info "Set RemoveIPC=no in $logind_conf"
 
-    if is_systemd && systemctl list-unit-files 2>/dev/null | grep -q systemd-logind; then
+    if is_systemd && systemctl list-unit-files 2>/dev/null | grep systemd-logind; then
         systemctl restart systemd-logind 2>/dev/null || log_warn "Failed to restart systemd-logind; reboot or restart manually for RemoveIPC change"
     fi
 }
@@ -417,7 +417,7 @@ EOF
     #     systemd-tmpfiles --create "$tmpfiles_file" 2>/dev/null || true
     # fi
 
-    if systemctl list-unit-files 2>/dev/null | grep -q systemd-tmpfiles-clean.timer; then
+    if systemctl list-unit-files 2>/dev/null | grep systemd-tmpfiles-clean.timer; then
         systemctl restart systemd-tmpfiles-clean.timer 2>/dev/null || \
             log_warn "Failed to restart systemd-tmpfiles-clean.timer"
     fi

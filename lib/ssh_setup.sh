@@ -202,14 +202,15 @@ apply_rac_ssh_client_config_remote() {
         log_warn "Failed to copy known_hosts blob to ${remote_ip}"
 
     sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${remote_ip}" \
-        "USER=${user} OINSTALL_GROUP=${oinstall_group} HOSTS='${host_line}' bash -s" <<'REMOTE_EOF'
-set -euo pipefail
+        "USER=${user} OINSTALL_GROUP=${oinstall_group} HOSTS='${host_line}' bash -s" <<'REMOTE_EOF' \
+        || log_warn "Failed to apply RAC SSH client config on ${remote_ip} for user ${user}"
+set -eu
 
 if [[ "$USER" == root ]]; then
     home="/root"
     owner_group="${USER}:${USER}"
 else
-    home=$(getent passwd "$USER" | cut -d: -f6)
+    home=$(getent passwd "$USER" 2>/dev/null | cut -d: -f6 || true)
     owner_group="${USER}:${OINSTALL_GROUP}"
 fi
 
@@ -333,6 +334,7 @@ dispatch_env_to_rac_nodes() {
         return 0
     fi
 
+    log_info "Syncing environment to remote RAC nodes (before SSH trust setup)..."
     local local_hn script_path host ip
     local_hn=$(get_local_hostname)
     script_path="$SCRIPT_DIR/install_oracle.sh"
@@ -346,6 +348,7 @@ dispatch_env_to_rac_nodes() {
         [[ "$host" == "$local_hn" ]] && continue
 
         log_info "Syncing environment configuration to node: $host"
+        sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no root@${ip} "mv -f /tmp/orainstall /tmp/orainstall_$(date +%Y%m%d%H%M%S)" || true
         sshpass -p "$root_pwd" scp -o StrictHostKeyChecking=no -r \
             "$SCRIPT_DIR" "root@${ip}:/tmp/orainstall" 2>/dev/null || \
             sshpass -p "$root_pwd" scp -o StrictHostKeyChecking=no -r \
@@ -353,7 +356,7 @@ dispatch_env_to_rac_nodes() {
             die "Cannot copy scripts to node $host"
 
         sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${ip}" \
-            "cd /tmp/orainstall && ./install_oracle.sh --node-env-only -c config/oracle.conf" 2>/dev/null || \
+            "cd /tmp/orainstall && ./install_oracle.sh --node-env-only -c config/oracle.conf" 2>&1 || \
             sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
             "cd /tmp/orainstall && ./install_oracle.sh --node-env-only -c config/oracle.conf" 2>&1 | tee -a "$LOG_FILE"
     done
