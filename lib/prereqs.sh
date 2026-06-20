@@ -37,6 +37,7 @@ install_prerequisites() {
         install_manual_packages
     fi
     install_extra_packages
+    install_bundled_rpms_if_missing
     fix_11g_libnsl_symlink
 }
 
@@ -165,6 +166,63 @@ install_extra_packages() {
     #        rpm -Uvh "$cvu_rpm" 2>/dev/null || true
     #    fi
     #fi
+}
+
+get_orainstall_rpm_dir() {
+    echo "${SCRIPT_DIR}/rpm"
+}
+
+rpm_package_installed() {
+    local pkg="$1"
+    rpm -q "$pkg" &>/dev/null
+}
+
+find_bundled_rpm() {
+    local name_pattern="$1"
+    local rpm_dir
+
+    rpm_dir=$(get_orainstall_rpm_dir)
+    [[ -d "$rpm_dir" ]] || return 1
+    find "$rpm_dir" -maxdepth 1 -type f -name "${name_pattern}*.rpm" 2>/dev/null | sort | head -1
+}
+
+install_bundled_rpm_if_missing() {
+    local pkg_name="$1"
+    local rpm_pattern="$2"
+    local rpm_file
+
+    rpm_package_installed "$pkg_name" && return 0
+
+    rpm_file=$(find_bundled_rpm "$rpm_pattern")
+    if [[ -z "$rpm_file" || ! -f "$rpm_file" ]]; then
+        log_warn "Package ${pkg_name} not installed and no bundled RPM (${rpm_pattern}*.rpm) in $(get_orainstall_rpm_dir)"
+        return 1
+    fi
+
+    log_info "Installing bundled RPM for ${pkg_name}: ${rpm_file}"
+    if rpm -Uvh "$rpm_file" >>"$LOG_FILE" 2>&1; then
+        log_info "Installed bundled RPM: $(basename "$rpm_file")"
+        return 0
+    fi
+
+    log_warn "Failed to install bundled RPM: ${rpm_file}"
+    return 1
+}
+
+install_bundled_rpms_if_missing() {
+    local rpm_dir
+
+    rpm_dir=$(get_orainstall_rpm_dir)
+    [[ -d "$rpm_dir" ]] || return 0
+
+    if [[ "$OS_FAMILY" == "redhat" && "$OS_MAJOR" -eq 7 ]]; then
+        install_bundled_rpm_if_missing "compat-libstdc++-33" "compat-libstdc++-33"
+        install_bundled_rpm_if_missing "elfutils-libelf-devel" "elfutils-libelf-devel"
+    fi
+
+    if ! command -v sshpass &>/dev/null; then
+        install_bundled_rpm_if_missing "sshpass" "sshpass"
+    fi
 }
 
 need_11g_libnsl_symlink_fix() {

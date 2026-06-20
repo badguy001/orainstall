@@ -4,7 +4,7 @@
 
 # ==================== Required: deployment type and versions ====================
 # ora_type: oracle=standalone | asm=ASM standalone | rac=RAC
-ora_type="oracle"
+ora_type="rac"
 
 # DB software version: 11gR1 | 11gR2 | 12cR1 | 12cR2 | 18c | 19c
 db_version="11gR2"
@@ -59,20 +59,20 @@ gi_home=""
 # Standalone/asm: hostname:ip  (ip optional, auto-detected)
 # rac: hostname:public_ip:vip:priv_ip1+priv_ip2,...
 # ora_net="oradb1:192.168.1.101"
-ora_net="oratest"
+ora_net="rac1:192.168.93.150:192.168.93.160:192.168.193.138,rac2:192.168.93.152:192.168.93.161:192.168.193.139"
 
 # Required for rac
-cluster_name=""
+cluster_name="rac-cluster"
 # cluser_name=""            # Alias for cluster_name
-root_pwd=""
+root_pwd="123456"
 
 # SCAN VIP addresses (comma-separated, required for rac)
 # scanip="192.168.1.30,192.168.1.31,192.168.1.32"
-scanip=""
+scanip="192.168.93.162"
 
 # SCAN name (default: ${cluster_name}-scan)
 # scan_name="rac19c-scan"
-scan_name=""
+scan_name="rac-scan"
 
 # ==================== ASM storage ====================
 # disks_use_by_asm: all ASM disks for udev rules (required for asm/rac)
@@ -80,17 +80,18 @@ scan_name=""
 # asm_disk_name is path relative to /dev (udev SYMLINK+=), e.g. asmdisk/ocr1 -> /dev/asmdisk/ocr1
 # At least one of disk_name/WWID required; asm_disk_name defaults to disk_name
 # disks_use_by_asm="sdb,scsi-36000...,asmdisk/ocr1+sdc,scsi-36000...,asmdisk/ocr2"
-disks_use_by_asm=""
+disks_use_by_asm=",36589cfc00000085085b60f91f14f2cee,asmdisk/ocr1"
 
 # ASM disk discovery string (required for asm/rac): GI rsp diskDiscoveryString
 # asm_disk_string="/dev/oracleasm/*,/dev/asm*,/dev/asmdisk/*"
+asm_disk_string="/dev/asmdisk/*"
 
 # When WWID cannot be obtained: 0=fail (default), 1=use disk_name in udev rule
 ignore_disk_wwid="0"
 
 # GI install disk group disks: comma-separated paths relative to /dev or /dev/... form
 # asm_diskgroup_disks="asmdisk/ocr1,asmdisk/ocr2"
-asm_diskgroup_disks=""
+asm_diskgroup_disks="asmdisk/ocr1"
 
 # Disk group created during GI install (default OCR)
 asm_diskgroup_name="OCR"
@@ -115,7 +116,7 @@ ntp_servers=""
 
 # OS install ISO, mounted as yum/dnf source (RHEL 8+ ISO: auto-configures BaseOS + AppStream)
 # os_iso_file="/path/to/rhel-8.2-x86_64-dvd1.iso"
-os_iso_file=""
+os_iso_file="/CentOS-7-x86_64-DVD-2009.iso"
 
 # ==================== Database parameters (run_mode=full) ====================
 DBNAME="orcl"
