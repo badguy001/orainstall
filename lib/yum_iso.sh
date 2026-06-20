@@ -99,7 +99,7 @@ refresh_pkg_manager_cache() {
     case "$PKG_MGR" in
         dnf)
             dnf clean all 2>/dev/null || true
-            dnf makecache 2>/dev/null || true
+            dnf makecache 2>/dev/null || die "Failed to refresh dnf cache"
             ;;
         yum)
             yum clean all 2>/dev/null || true
