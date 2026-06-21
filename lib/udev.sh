@@ -7,9 +7,10 @@ append_asm_udev_rule() {
     local asm_disk_name="$3"
     local disk_name="$4"
     local udev_file="$5"
+    local scsi_id_cmd=$(get_scsi_id_cmd)
 
     if [[ -n "$wwid" ]]; then
-        echo "KERNEL==\"${real_disk}\", SUBSYSTEM==\"block\", PROGRAM==\"/usr/bin/scsi_id --whitelisted --replace-letters --device=/dev/\$name\", RESULT==\"${wwid}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"${oinstall_group}\", MODE=\"0660\"" >> "$udev_file"
+        echo "KERNEL==\"${real_disk}\", SUBSYSTEM==\"block\", PROGRAM==\"${scsi_id_cmd} --whitelisted --replace-letters --device=/dev/\$name\", RESULT==\"${wwid}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"${oinstall_group}\", MODE=\"0660\"" >> "$udev_file"
         log_info "udev: ${asm_disk_name} -> /dev/${real_disk} (WWID=$wwid)"
     else
         local kernel_name="${disk_name:-$real_disk}"

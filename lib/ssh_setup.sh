@@ -1,5 +1,5 @@
 #!/bin/bash
-# RAC node SSH trust setup
+# RAC node SSH trust setup (shared key pair on all nodes, hostname-only known_hosts)
 
 setup_ssh_trust() {
     if ! is_rac; then
@@ -27,6 +27,10 @@ setup_ssh_trust() {
             log_warn "Cannot connect to node $host; check root_pwd and network"
     done
 
+    #local kh_blob="${LOG_DIR}/rac_known_hosts.blob"
+    #build_rac_known_hosts_blob > "$kh_blob"
+    #[[ -s "$kh_blob" ]] || log_warn "No RAC host keys collected; check network/DNS and node hostnames"
+
     local users=("$db_user")
     if need_gi; then
         users+=("$gi_user")
@@ -34,7 +38,7 @@ setup_ssh_trust() {
     users+=("root")
 
     for u in "${users[@]}"; do
-        setup_user_ssh_trust "$u"
+        setup_user_ssh_trust "$u" 
     done
 
     verify_rac_passwordless_ssh
@@ -62,49 +66,17 @@ chown_user_path() {
     fi
 }
 
-get_rac_ssh_targets() {
-    local entry hostname pub_ip vip priv_ips priv
-    local -a targets=()
-
-    for entry in "${ORA_NET_NODES[@]}"; do
-        [[ -z "$entry" ]] && continue
-        IFS=':' read -r hostname pub_ip vip priv_ips <<< "$entry"
-        [[ -n "$hostname" ]] && targets+=("$hostname")
-        pub_ip=$(resolve_host_ip "$hostname" "${pub_ip:-}")
-        [[ -n "$pub_ip" ]] && targets+=("$pub_ip")
-        [[ -n "${vip:-}" ]] && targets+=("${hostname}-vip" "$vip")
-        if [[ -n "${priv_ips:-}" ]]; then
-            local IFS='+'
-            read -ra priv_arr <<< "$priv_ips"
-            local idx=1
-            for priv in "${priv_arr[@]}"; do
-                priv="${priv// /}"
-                [[ -n "$priv" ]] && targets+=("${hostname}priv${idx}" "$priv")
-                idx=$(( idx + 1 ))
-            done
-        fi
-    done
-
-    [[ -n "${scan_name:-}" ]] && targets+=("$scan_name")
-    if [[ ${#SCAN_IPS[@]} -gt 0 ]]; then
-        local scan_ip
-        for scan_ip in "${SCAN_IPS[@]}"; do
-            targets+=("$scan_ip")
-        done
-    fi
-
-    printf '%s\n' "${targets[@]}" | awk 'NF && !seen[$0]++'
-}
-
 build_rac_known_hosts_blob() {
-    local target
+    local hostname
 
-    while read -r target; do
-        [[ -n "$target" ]] || continue
-        ssh-keyscan -H "$target" 2>/dev/null || true
-    done < <(get_rac_ssh_targets)
+    get_rac_node_hostnames
+    for hostname in "${RAC_NODE_HOSTS[@]}"; do
+        [[ -n "$hostname" ]] || continue
+        ssh-keyscan -H "$hostname" 2>/dev/null || true
+    done
 }
 
+# useless function
 merge_known_hosts_file() {
     local dest="$1"
     local src="$2"
@@ -117,18 +89,46 @@ merge_known_hosts_file() {
     mv "${dest}.tmp" "$dest"
 }
 
+# useless function
+append_user_authorized_key() {
+    local user="$1"
+    local ssh_dir="$2"
+    local pub_key="${ssh_dir}/id_rsa.pub"
+    local auth_keys="${ssh_dir}/authorized_keys"
+
+    [[ -f "$pub_key" ]] || return 0
+    touch "$auth_keys"
+    cat "$pub_key" >> "$auth_keys"
+    sort -u "$auth_keys" -o "$auth_keys"
+    chmod 600 "$auth_keys"
+    chown_user_path "$user" "$auth_keys"
+}
+
+# useless function
+set_user_ssh_key_permissions() {
+    local user="$1"
+    local ssh_dir="$2"
+
+    chmod 700 "$ssh_dir"
+    [[ -f "${ssh_dir}/id_rsa" ]] && chmod 600 "${ssh_dir}/id_rsa"
+    [[ -f "${ssh_dir}/id_rsa.pub" ]] && chmod 644 "${ssh_dir}/id_rsa.pub"
+    [[ -f "${ssh_dir}/authorized_keys" ]] && chmod 600 "${ssh_dir}/authorized_keys"
+    [[ -f "${ssh_dir}/known_hosts" ]] && chmod 644 "${ssh_dir}/known_hosts"
+    [[ -f "${ssh_dir}/config" ]] && chmod 600 "${ssh_dir}/config"
+    chown_user_path "$user" "$ssh_dir"
+}
+
+# useless function
 write_user_ssh_rac_config() {
     local user="$1"
-    local home="$2"
-    local ssh_dir="$3"
-    local config_file="${4:-${ssh_dir}/config}"
-    local targets host_line tmp
+    local ssh_dir="$2"
+    local config_file="${ssh_dir}/config"
+    local host_line tmp
 
-    targets=$(get_rac_ssh_targets | tr '\n' ' ')
-    [[ -n "${targets// /}" ]] || return 0
+    get_rac_node_hostnames
+    [[ ${#RAC_NODE_HOSTS[@]} -gt 0 ]] || return 0
 
-    host_line="${targets//  / }"
-    config_file="${config_file:-${ssh_dir}/config}"
+    host_line="${RAC_NODE_HOSTS[*]}"
     touch "$config_file"
 
     if grep -q '# >>> orainstall rac ssh >>>' "$config_file" 2>/dev/null; then
@@ -145,7 +145,6 @@ write_user_ssh_rac_config() {
         echo ""
         echo "# >>> orainstall rac ssh >>>"
         echo "Host ${host_line}"
-        echo "    StrictHostKeyChecking no"
         echo "    BatchMode yes"
         echo "# <<< orainstall rac ssh <<<"
     } >> "$config_file"
@@ -154,179 +153,171 @@ write_user_ssh_rac_config() {
     chown_user_path "$user" "$config_file"
 }
 
-populate_user_known_hosts() {
+# useless function
+finalize_user_ssh_dir() {
     local user="$1"
-    local home="$2"
-    local ssh_dir="$3"
-    local known_hosts="${4:-${ssh_dir}/known_hosts}"
-    local kh_blob="${LOG_DIR}/rac_known_hosts.blob"
+    local ssh_dir="$2"
+    local kh_blob="$3"
 
-    build_rac_known_hosts_blob > "$kh_blob"
-    [[ -s "$kh_blob" ]] || log_warn "No RAC host keys collected for ${user}; check network/DNS"
-
-    known_hosts="${known_hosts:-${ssh_dir}/known_hosts}"
-    merge_known_hosts_file "$known_hosts" "$kh_blob"
-    chmod 644 "$known_hosts"
-    chown_user_path "$user" "$known_hosts"
+    append_user_authorized_key "$user" "$ssh_dir"
+    if [[ -f "$kh_blob" ]]; then
+        merge_known_hosts_file "${ssh_dir}/known_hosts" "$kh_blob"
+    fi
+    write_user_ssh_rac_config "$user" "$ssh_dir"
+    set_user_ssh_key_permissions "$user" "$ssh_dir"
 }
 
-apply_rac_ssh_client_config_local() {
+deploy_user_ssh_trust_all_nodes() {
     local user="$1"
-    local home ssh_dir
+    local host="$2"
+    local kh_blob="$3"
+    local id_file="$4"
+    local pub_file="$5"
+    local user_group=""
+    local ssh_dir home
 
+    [[ -n "$host" ]] || return 0
     home=$(get_user_home_dir "$user")
     [[ -n "$home" ]] || return 0
     ssh_dir="${home}/.ssh"
-    mkdir -p "$ssh_dir"
-    chmod 700 "$ssh_dir"
-    chown_user_path "$user" "$ssh_dir"
+    if [[ "$user" == "root" ]]; then
+        user_group="root:root"
+    else
+        user_group="${user}:${oinstall_group}"
+    fi
+    [[ -f "${id_file}" && -f "${pub_file}" ]] || {
+        log_warn "Missing SSH keys for ${user}; skip deploy to ${host}"
+        return 0
+    }
 
-    populate_user_known_hosts "$user" "$home" "$ssh_dir"
-    write_user_ssh_rac_config "$user" "$home" "$ssh_dir"
-    log_info "RAC SSH client config applied locally for: $user"
-}
-
-apply_rac_ssh_client_config_remote() {
-    local user="$1"
-    local remote_ip="$2"
-    local kh_blob="${LOG_DIR}/rac_known_hosts.blob"
-    local targets host_line
-
-    [[ -n "$remote_ip" ]] || return 0
-    targets=$(get_rac_ssh_targets | tr '\n' ' ')
-    host_line="${targets//  / }"
-    [[ -s "$kh_blob" ]] || build_rac_known_hosts_blob > "$kh_blob"
-
+    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+        "mkdir -p '${ssh_dir}' && chown -R '${user_group}' '${ssh_dir}' && chmod 700 '${ssh_dir}'" 2>/dev/null || {
+        log_warn "Failed to prepare remote ssh_dir on ${host} for user ${user}"
+        return 0
+    }
+    if [[ ! "$host" == "$(get_local_hostname)" ]]; then
+        log_info "Backup remote id_file and pub_file on ${host} for user ${user}"
+        sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+            "[[ -f '${id_file}' ]] && mv -f '${id_file}' '${id_file}_$(date +%Y%m%d%H%M%S)' || true " 2>/dev/null || {
+            log_warn "Failed to backup remote id_file on ${host} for user ${user}"
+            return 0
+        }
+        sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+            "[[ -f '${pub_file}' ]] && mv -f '${pub_file}' '${pub_file}_$(date +%Y%m%d%H%M%S)' || true " 2>/dev/null || {
+            log_warn "Failed to backup remote pub_file on ${host} for user ${user}"
+            return 0
+        }
+    fi 
+    # copy id_file and pub_file to host
     sshpass -p "$root_pwd" scp -o StrictHostKeyChecking=no \
-        "$kh_blob" "root@${remote_ip}:/tmp/orainstall_known_hosts" 2>/dev/null || \
-        log_warn "Failed to copy known_hosts blob to ${remote_ip}"
-
-    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${remote_ip}" \
-        "USER=${user} OINSTALL_GROUP=${oinstall_group} HOSTS='${host_line}' bash -s" <<'REMOTE_EOF' \
-        || log_warn "Failed to apply RAC SSH client config on ${remote_ip} for user ${user}"
-set -eu
-
-if [[ "$USER" == root ]]; then
-    home="/root"
-    owner_group="${USER}:${USER}"
-else
-    home=$(getent passwd "$USER" 2>/dev/null | cut -d: -f6 || true)
-    owner_group="${USER}:${OINSTALL_GROUP}"
-fi
-
-[[ -n "$home" ]] || exit 0
-ssh_dir="${home}/.ssh"
-config_file="${ssh_dir}/config"
-mkdir -p "$ssh_dir"
-chmod 700 "$ssh_dir"
-
-if [[ -f /tmp/orainstall_known_hosts ]]; then
-    touch "${ssh_dir}/known_hosts"
-    cat /tmp/orainstall_known_hosts >> "${ssh_dir}/known_hosts"
-    awk 'NF && !seen[$0]++' "${ssh_dir}/known_hosts" > "${ssh_dir}/known_hosts.tmp"
-    mv "${ssh_dir}/known_hosts.tmp" "${ssh_dir}/known_hosts"
-    chmod 644 "${ssh_dir}/known_hosts"
-    rm -f /tmp/orainstall_known_hosts
-fi
-
-if grep -q '# >>> orainstall rac ssh >>>' "$config_file" 2>/dev/null; then
-    awk '
-        $0 == "# >>> orainstall rac ssh >>>" { skip=1; next }
-        $0 == "# <<< orainstall rac ssh <<<" { skip=0; next }
-        !skip { print }
-    ' "$config_file" > "${config_file}.tmp"
-    mv "${config_file}.tmp" "$config_file"
-fi
-
-{
-    echo ""
-    echo "# >>> orainstall rac ssh >>>"
-    echo "Host ${HOSTS}"
-    echo "    StrictHostKeyChecking no"
-    echo "    BatchMode yes"
-    echo "# <<< orainstall rac ssh <<<"
-} >> "$config_file"
-
-chmod 600 "$config_file"
-chown -R "$owner_group" "$ssh_dir"
-REMOTE_EOF
+        "${id_file}" "${pub_file}" "root@${host}:${ssh_dir}" 2>/dev/null || {
+        log_warn "Failed to copy SSH keys to ${host} for user ${user}"
+        return 0
+    }
+    # append pub_file to authorized_keys
+    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+        "cat '${pub_file}' >> '${ssh_dir}/authorized_keys'" 2>/dev/null || {
+        log_warn "Failed to add public key to authorized_keys on ${host} for user ${user}"
+        return 0
+    }
+    # read local file $kh_blob and append to known_hosts
+    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+        "cat >> '${ssh_dir}/known_hosts'" < "$kh_blob" 2>/dev/null || {
+        die "Failed to append known_hosts on ${host} for user ${user}"
+    }
+    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${host}" \
+        "chown '${user_group}' '${id_file}' '${pub_file}' '${ssh_dir}/authorized_keys' '${ssh_dir}/known_hosts' && chmod 600 '${id_file}' '${pub_file}' '${ssh_dir}/authorized_keys' '${ssh_dir}/known_hosts'" 2>/dev/null || {
+        die "Failed to set permissions on ${host} for user ${user}"
+    }
+    log_info "SSH trust deployed to ${host} for user ${user}"
+    return 0
 }
 
 setup_user_ssh_trust() {
     local user="$1"
-    local home ssh_dir
-    local host ip local_hn
+    local kh_blob="/tmp/orainstall_known_hosts_$(date +%Y%m%d%H%M%S)"
+    local home ssh_dir local_hn host ip
 
     home=$(get_user_home_dir "$user")
     [[ -n "$home" ]] || die "Home directory not found for user: $user"
 
     ssh_dir="${home}/.ssh"
+    id_file="${ssh_dir}/id_rsa"
+    pub_file="${ssh_dir}/id_rsa.pub"
     mkdir -p "$ssh_dir"
     chmod 700 "$ssh_dir"
     chown_user_path "$user" "$ssh_dir"
 
-    if [[ ! -f "${ssh_dir}/id_rsa" ]]; then
-        ssh-keygen -t rsa -b 4096 -N "" -f "${ssh_dir}/id_rsa" -q
+    if [[ ! -f "${id_file}" ]]; then
+        ssh-keygen -t rsa -b 4096 -N "" -f "${id_file}" -q
     fi
-    chmod 600 "${ssh_dir}/id_rsa"
-    chown_user_path "$user" "${ssh_dir}/id_rsa"
 
+    # finalize_user_ssh_dir "$user" "$ssh_dir" "$kh_blob"
+
+    get_rac_node_hostnames
+    get_rac_public_ips
     local_hn=$(get_local_hostname)
     for i in "${!RAC_NODE_HOSTS[@]}"; do
         host="${RAC_NODE_HOSTS[$i]}"
         ip="${RAC_PUBLIC_IPS[$i]}"
-        for target in "$host" "$ip"; do
-            [[ -z "$target" ]] && continue
-            if [[ "$user" == "root" ]]; then
-                sshpass -p "$root_pwd" ssh-copy-id -o StrictHostKeyChecking=no \
-                    -i "${ssh_dir}/id_rsa.pub" "root@${target}" 2>/dev/null || true
-            else
-                sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${target}" \
-                    "mkdir -p ${ssh_dir} && chown ${user}:${user} ${ssh_dir} && chmod 700 ${ssh_dir}" 2>/dev/null || true
-                sshpass -p "$root_pwd" ssh-copy-id -o StrictHostKeyChecking=no \
-                    -i "${ssh_dir}/id_rsa.pub" "${user}@${target}" 2>/dev/null || true
-            fi
-        done
+        su - "$user" -c "ssh-keyscan '$host' >> '$kh_blob' 2>/dev/null"
     done
-
-    cat "${ssh_dir}/id_rsa.pub" >> "${ssh_dir}/authorized_keys"
-    sort -u "${ssh_dir}/authorized_keys" -o "${ssh_dir}/authorized_keys"
-    chmod 600 "${ssh_dir}/authorized_keys"
-    chown_user_path "$user" "${ssh_dir}/authorized_keys"
-
-    apply_rac_ssh_client_config_local "$user"
-
     for i in "${!RAC_NODE_HOSTS[@]}"; do
         host="${RAC_NODE_HOSTS[$i]}"
         ip="${RAC_PUBLIC_IPS[$i]}"
-        [[ "$host" == "$local_hn" ]] && continue
-        apply_rac_ssh_client_config_remote "$user" "$ip"
+        deploy_user_ssh_trust_all_nodes "$user" "$host" "$kh_blob" "$id_file" "$pub_file"
     done
 
-    log_info "SSH trust configured for: $user"
+    log_info "SSH trust configured for: $user (shared key on all nodes)"
+}
+
+run_passwordless_ssh_check() {
+    local user="$1"
+    local from_label="$2"
+    local remote_ip="$3"
+    local target="$4"
+
+    if [[ "$from_label" == "local" ]]; then
+        su - "$user" -c "ssh -o BatchMode=yes -o ConnectTimeout=10 '${target}' hostname" >/dev/null 2>&1
+        return $?
+    fi
+
+    sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${remote_ip}" \
+        "su - '${user}' -c \"ssh -o BatchMode=yes -o ConnectTimeout=10 '${target}' hostname\"" >/dev/null 2>&1
 }
 
 verify_rac_passwordless_ssh() {
-    local user local_hn host
+    local user host from_host remote_ip local_hn
     local users=("$db_user")
     local failed=0
 
     need_gi && users+=("$gi_user")
+    get_rac_node_hostnames
+    get_rac_public_ips
     local_hn=$(get_local_hostname)
 
     for user in "${users[@]}"; do
-        for host in "${RAC_NODE_HOSTS[@]}"; do
-            [[ "$host" == "$local_hn" ]] && continue
-            if su - "$user" -c "ssh -o BatchMode=yes -o ConnectTimeout=10 '${host}' hostname" >/dev/null 2>&1; then
-                log_info "Passwordless SSH OK: ${user}@${host}"
+        for i in "${!RAC_NODE_HOSTS[@]}"; do
+            from_host="${RAC_NODE_HOSTS[$i]}"
+            remote_ip="${RAC_PUBLIC_IPS[$i]}"
+            if [[ "$from_host" == "$local_hn" ]]; then
+                from_label="local"
             else
-                die "Passwordless SSH check failed: ${user}@${host} (GI install may fail)"
-                failed=1
+                from_label="remote"
             fi
+
+            for host in "${RAC_NODE_HOSTS[@]}"; do
+                if run_passwordless_ssh_check "$user" "$from_label" "$remote_ip" "$host"; then
+                    log_info "Passwordless SSH OK: ${user}@${from_host} -> ${host}"
+                else
+                    log_warn "Passwordless SSH check failed: ${user}@${from_host} -> ${host}"
+                    failed=1
+                fi
+            done
         done
     done
 
-    [[ $failed -eq 0 ]] || log_warn "Fix RAC SSH trust before GI installation (known_hosts / keys)"
+    [[ $failed -eq 0 ]] || die "RAC SSH trust verification failed (shared keys / authorized_keys / known_hosts)"
 }
 
 dispatch_env_to_rac_nodes() {

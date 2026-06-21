@@ -308,11 +308,24 @@ find_disk_by_name_or_wwid() {
     return 1
 }
 
+get_scsi_id_cmd() {
+    local scsi_id_cmd
+    scsi_id_cmd=$(which scsi_id 2>/dev/null || true)
+    if [[ -z "$scsi_id_cmd" && -f "/lib/udev/scsi_id" ]]; then
+        scsi_id_cmd="/lib/udev/scsi_id"
+    fi
+    if [[ -z "$scsi_id_cmd" && -f "/usr/lib/udev/scsi_id" ]]; then
+        scsi_id_cmd="/usr/lib/udev/scsi_id"
+    fi
+    echo "$scsi_id_cmd"
+}
+
 get_disk_wwid() {
     local disk="$1"
     local wwid
-    wwid=$(/usr/lib/udev/scsi_id -g -u "/dev/${disk}" 2>/dev/null || true)
-    [[ -n "$wwid" ]] || wwid=$(/lib/udev/scsi_id -g -u "/dev/${disk}" 2>/dev/null || true)
+    local scsi_id_cmd=$(get_scsi_id_cmd)
+    wwid=$(${scsi_id_cmd} -g -u "/dev/${disk}" 2>/dev/null || true)
+    [[ -n "$wwid" ]] || wwid=$${scsi_id_cmd} -g -u "/dev/${disk}" 2>/dev/null || true)
     echo "$wwid"
 }
 

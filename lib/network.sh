@@ -84,8 +84,7 @@ configure_rac_hosts() {
         [[ -n "$vip" ]] && set_hosts_entry "$vip" "${hostname}-vip"
 
         if [[ -n "${priv_ips:-}" ]]; then
-            local IFS='+'
-            read -ra priv_arr <<< "$priv_ips"
+            IFS='+' read -ra priv_arr <<< "$priv_ips"
             local idx=1
             for priv in "${priv_arr[@]}"; do
                 set_hosts_entry "$priv" "${hostname}priv${idx}"
@@ -221,7 +220,7 @@ find_iface_subnet_for_ip() {
     local target_ip="$1"
     local ifname ip_cidr ip prefix network
 
-    while read -r ifname ip_cidr; do
+    while IFS=' ' read -r ifname ip_cidr; do
         [[ -n "$ifname" && -n "$ip_cidr" ]] || continue
         ip="${ip_cidr%%/*}"
         prefix="${ip_cidr##*/}"
@@ -238,7 +237,7 @@ find_iface_subnet_for_ip() {
 is_local_ipv4_address() {
     local target_ip="$1"
     [[ -n "$target_ip" ]] || return 1
-    find_iface_subnet_for_ip "$target_ip" &>/dev/null
+    find_iface_subnet_for_ip "$target_ip"
 }
 
 build_rac_network_interface_list() {
