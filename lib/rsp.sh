@@ -240,7 +240,7 @@ set_gi_rsp_params() {
 
 render_gi_install_rsp() {
     local dest="$1"
-    local template install_option cluster_nodes scan_name cluster_name_cfg network_if_list=""
+    local template install_option cluster_nodes cluster_name_cfg network_if_list=""
     local asm_osdba asm_osoper asm_osasm asm_dg_disks=""
 
     template=$(resolve_rsp_template \
@@ -257,7 +257,7 @@ render_gi_install_rsp() {
 
     install_option="HA_CONFIG"
     cluster_nodes="$(hostname -s)"
-    scan_name=""
+    scan_name="${scan_name:-${cluster_name}-scan}"
     cluster_name_cfg="$(hostname -s)"
 
     if is_rac; then

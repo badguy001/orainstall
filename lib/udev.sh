@@ -73,6 +73,70 @@ configure_asm_udev() {
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger --subsystem-match=block 2>/dev/null || true
     sleep 2
+
+    verify_asm_udev_disks
+}
+
+verify_asm_disk_dev() {
+    local asm_disk_name="$1"
+    local dev_path expected_user expected_group
+    local owner group mode dev_type link_target
+    local retry max_retry=5
+
+    dev_path=$(normalize_asm_disk_dev_path "$asm_disk_name") || \
+        die "Invalid asm_disk_name: $asm_disk_name"
+
+    expected_user="${gi_user}"
+    expected_group="asmadmin"
+
+    for (( retry=1; retry <= max_retry; retry++ )); do
+        [[ -e "$dev_path" ]] && break
+        [[ $retry -lt $max_retry ]] && sleep 1
+    done
+    [[ -e "$dev_path" ]] || die "ASM disk device not found: $dev_path (asm_disk_name=$asm_disk_name)"
+
+    if [[ -L "$dev_path" ]]; then
+        link_target=$(readlink -f "$dev_path" 2>/dev/null || readlink "$dev_path" 2>/dev/null || true)
+        log_info "ASM disk $dev_path is a symlink -> ${link_target:-unknown}"
+    fi
+
+    dev_type=$(stat -L -c '%F' "$dev_path" 2>/dev/null) || \
+        die "Cannot stat ASM disk: $dev_path"
+    [[ "$dev_type" == "block special file" ]] || \
+        die "ASM disk path is not a block device: $dev_path (type=$dev_type)"
+
+    owner=$(stat -L -c '%U' "$dev_path" 2>/dev/null) || \
+        die "Cannot read owner for ASM disk: $dev_path"
+    group=$(stat -L -c '%G' "$dev_path" 2>/dev/null) || \
+        die "Cannot read group for ASM disk: $dev_path"
+    mode=$(stat -L -c '%a' "$dev_path" 2>/dev/null) || \
+        die "Cannot read mode for ASM disk: $dev_path"
+
+    [[ "$owner" == "$expected_user" ]] || \
+        die "ASM disk $dev_path owner is $owner, expected $expected_user"
+    [[ "$group" == "$expected_group" ]] || \
+        die "ASM disk $dev_path group is $group, expected $expected_group"
+    [[ "$mode" == "660" ]] || \
+        die "ASM disk $dev_path mode is $mode, expected 660"
+
+    log_info "ASM disk verified: $dev_path ($owner:$group mode=$mode)"
+}
+
+verify_asm_udev_disks() {
+    local disk_entry disk_name wwid asm_disk_name dev_path
+
+    log_info "Verifying ASM udev disk paths (owner=${gi_user}:asmadmin mode=660)..."
+
+    for disk_entry in "${ASM_DISK_ENTRIES[@]}"; do
+        [[ -z "$disk_entry" ]] && continue
+        IFS=',' read -r disk_name wwid asm_disk_name <<< "$disk_entry"
+        asm_disk_name="${asm_disk_name:-$disk_name}"
+
+        dev_path=$(normalize_asm_disk_dev_path "$asm_disk_name") || \
+            die "Invalid asm_disk_name in config: $asm_disk_name"
+
+        verify_asm_disk_dev "$asm_disk_name"
+    done
 }
 
 prepare_asm_disks_for_installer() {
