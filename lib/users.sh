@@ -33,7 +33,7 @@ create_oracle_users() {
 
     if need_gi; then
         local gi_groups="$oinstall_group"
-        read -r _gi_osdba _gi_osoper _gi_osasm <<< "$(get_gi_asm_group_names)"
+        IFS=' ' read -r _gi_osdba _gi_osoper _gi_osasm <<< "$(get_gi_asm_group_names)"
         gi_groups="$oinstall_group,${_gi_osdba},${_gi_osoper},${_gi_osasm}"
         if need_gi; then
             case ",${gi_groups}," in

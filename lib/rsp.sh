@@ -249,7 +249,7 @@ render_gi_install_rsp() {
         "grid_install_11.2.rsp" "grid_install_12.1.rsp" "gridsetup_12.2.rsp" \
         "gridsetup_19.rsp" "gridsetup.rsp" "grid_install.rsp")
 
-    read -r asm_osdba asm_osoper asm_osasm <<< "$(get_gi_asm_group_names)"
+    IFS=' ' read -r asm_osdba asm_osoper asm_osasm <<< "$(get_gi_asm_group_names)"
 
     if [[ ${#ASM_DISKGROUP_DISK_LIST[@]} -gt 0 ]]; then
         asm_dg_disks=$(IFS=','; echo "${ASM_DISKGROUP_DISK_LIST[*]}")

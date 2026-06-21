@@ -10,11 +10,19 @@ append_asm_udev_rule() {
     local scsi_id_cmd=$(get_scsi_id_cmd)
 
     if [[ -n "$wwid" ]]; then
-        echo "KERNEL==\"${real_disk}\", SUBSYSTEM==\"block\", PROGRAM==\"${scsi_id_cmd} --whitelisted --replace-letters --device=/dev/\$name\", RESULT==\"${wwid}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"${oinstall_group}\", MODE=\"0660\"" >> "$udev_file"
+        if [[ "$use_multipathd" == "1" ]]; then
+            echo "SUBSYSTEM==\"block\", ENV{DM_NAME}==\"${disk_name}\", PROGRAM==\"${scsi_id_cmd} --whitelisted --device=/dev/\$name\", RESULT==\"${wwid}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"asmadmin\", MODE=\"0660\"" >> "$udev_file"
+        else
+            echo "KERNEL==\"${real_disk}\", SUBSYSTEM==\"block\", PROGRAM==\"${scsi_id_cmd} --whitelisted --device=/dev/\$name\", RESULT==\"${wwid}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"asmadmin\", MODE=\"0660\"" >> "$udev_file"
+        fi
         log_info "udev: ${asm_disk_name} -> /dev/${real_disk} (WWID=$wwid)"
     else
         local kernel_name="${disk_name:-$real_disk}"
-        echo "KERNEL==\"${kernel_name}\", SUBSYSTEM==\"block\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"${oinstall_group}\", MODE=\"0660\"" >> "$udev_file"
+        if [[ "$use_multipathd" == "1" ]]; then
+            echo "SUBSYSTEM==\"block\", ENV{DM_NAME}==\"${disk_name}\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"asmadmin\", MODE=\"0660\"" >> "$udev_file"
+        else
+            echo "KERNEL==\"${kernel_name}\", SUBSYSTEM==\"block\", SYMLINK+=\"${asm_disk_name}\", OWNER=\"${gi_user}\", GROUP=\"asmadmin\", MODE=\"0660\"" >> "$udev_file"
+        fi
         log_warn "udev: WWID unavailable, using disk name rule: ${kernel_name} -> ${asm_disk_name}"
     fi
 }
@@ -44,8 +52,9 @@ configure_asm_udev() {
             die "Disk configuration error: at least one of disk_name or WWID is required"
         fi
 
-        real_disk=$(find_disk_by_name_or_wwid "$disk_name" "$wwid") || \
-            die "Disk not found: name=$disk_name wwid=$wwid"
+        #real_disk=$(find_disk_by_name_or_wwid "$disk_name" "$wwid") || \
+        #    die "Disk not found: name=$disk_name wwid=$wwid"
+        real_disk="$disk_name"
 
         if [[ -z "$wwid" ]]; then
             wwid=$(get_disk_wwid "$real_disk")

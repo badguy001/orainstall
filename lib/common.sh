@@ -325,7 +325,7 @@ get_disk_wwid() {
     local wwid
     local scsi_id_cmd=$(get_scsi_id_cmd)
     wwid=$(${scsi_id_cmd} -g -u "/dev/${disk}" 2>/dev/null || true)
-    [[ -n "$wwid" ]] || wwid=$${scsi_id_cmd} -g -u "/dev/${disk}" 2>/dev/null || true)
+    [[ -n "$wwid" ]] || wwid=$(${scsi_id_cmd} -g -u "/dev/${disk}" 2>/dev/null || true)
     echo "$wwid"
 }
 
@@ -381,7 +381,7 @@ detect_local_ip() {
 
     ip=$(ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {
         split($2,a,"/"); print a[1], $NF
-    }' | while read -r addr ifname; do
+    }' | while IFS=' ' read -r addr ifname; do
         if [[ "$ifname" != "lo" && "$addr" =~ ^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]]; then
             echo "$addr"; exit 0
         fi

@@ -105,6 +105,7 @@ asm_diskgroup_ausize="4"
 # SYSASM password; leave empty to auto-generate (letters and digits only)
 # asm_passwd=""
 
+# when use multipathd ,disk_name in disks_use_by_asm is alias name of multipathd(use ENV{DM_NAME} to match disk_name)
 use_multipathd="0"
 
 # ==================== System configuration ====================
