@@ -55,13 +55,7 @@ install_gi_software() {
         die "GI software installation failed"
     fi
 
-    local ohasd_monitor=0
-    if need_gi_ohasd_inittab_fix; then
-        start_gi_ohasd_inittab_monitor
-        ohasd_monitor=1
-    fi
     run_gi_root_scripts
-    [[ $ohasd_monitor -eq 1 ]] && stop_gi_ohasd_inittab_monitor
 
     run_gi_config_tool_all_commands
 
@@ -78,6 +72,7 @@ run_gi_root_scripts() {
         "${inv}/orainstRoot.sh" 2>&1 | tee -a "$LOG_FILE"
     fi
     if [[ -x "${gi_home}/root.sh" ]]; then
+        install_gi_ohasd_systemd_service
         "${gi_home}/root.sh" 2>&1 | tee -a "$LOG_FILE"
     fi
 
@@ -93,6 +88,7 @@ run_gi_root_scripts() {
             log_info "Running GI root.sh on node $host..."
             sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${ip}" \
                 "${inv}/orainstRoot.sh" 2>&1 | tee -a "$LOG_FILE" || true
+            install_gi_ohasd_systemd_service_remote "$ip"
             sshpass -p "$root_pwd" ssh -o StrictHostKeyChecking=no "root@${ip}" \
                 "${gi_home}/root.sh" 2>&1 | tee -a "$LOG_FILE" || true
         done
